@@ -1,0 +1,21 @@
+# Build directory — contains machine-specific absolute paths
+build/
+
+# Compiled binaries
+main
+mcp_manager
+*.o
+*.a
+
+# Tokens file — contains real Bearer tokens, do NOT commit
+tokens.json
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
