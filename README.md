@@ -1,111 +1,231 @@
-# MCP Server Manager (C++ / wxWidgets)
+<div align="center">
 
-[English](#english) | [Русский](#русский)
+# MCP Server Manager
+
+**A cross-platform desktop application for hosting a Model Context Protocol server, built in C++ with wxWidgets.**
+
+[![Language](https://img.shields.io/badge/language-C++17-blue.svg)](https://isocpp.org/)
+[![GUI](https://img.shields.io/badge/GUI-wxWidgets-green.svg)](https://wxwidgets.org/)
+[![Build System](https://img.shields.io/badge/build-CMake-red.svg)](https://cmake.org/)
+[![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-informational.svg)]()
+
+[English](#english) · [Русский](#русский)
+
+</div>
 
 ---
 
 <a name="english"></a>
-## 🇬🇧 English
+## English
 
 ### Overview
-**MCP Server Manager** is a robust, desktop-based graphical interface and backend server for the Model Context Protocol (MCP). It is written in C++ and uses wxWidgets for its cross-platform Graphical User Interface (GUI). The server securely exposes a local workspace environment to Large Language Models (LLMs) or remote clients, allowing them to interact with the file system, execute commands, and run scripts in a sandboxed manner.
 
-### Key Features
-* **Modern GUI**: Built with wxWidgets and styled with a sleek Teal theme.
-* **Workspace Management**: Easily select, create, and manage the active directory available to the LLM.
-* **Multilingual Support**: Switch seamlessly between English and Russian on the fly.
-* **Live Server Logs**: Monitor tool calls, errors, and system events in real-time.
-* **Port Forwarding Guidance**: Built-in instructions on how to expose the local server using ngrok or router configurations.
-* **Background Processing**: Execute scripts or GUI apps asynchronously.
+MCP Server Manager is a production-ready desktop application that runs a local [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server and exposes it to Large Language Models or remote clients over HTTP with SSE transport. It provides a native GUI for controlling the server, managing access tokens, monitoring live metrics, and configuring the workspace — all without requiring any command-line interaction.
 
-### Exposed Tools for LLMs
-The server implements the Model Context Protocol and exposes the following tools via JSON-RPC over HTTP:
-1. `list_directory`: List files and directories within a specific path.
-2. `read_file`: Read the text content of a file.
-3. `write_file`: Write or overwrite text content to a file.
-4. `start_script`: Launch a script, application, or game. Supports background execution (e.g., for GUI apps).
-5. `search_files`: Recursively search for files matching a specific query string.
-6. `execute_command`: Execute arbitrary terminal commands in the workspace and return captured output.
-7. `take_screenshot`: Capture a screenshot of the main monitor (uses Python PIL internally) and return it as a base64 encoded image.
+The server uses Bearer Token authentication and supports selective VPN bypass to expose the correct public IP.
+
+---
+
+### Features
+
+| Feature | Description |
+|---|---|
+| Native Desktop GUI | Built with wxWidgets; no Electron, no web UI overhead |
+| Bearer Token Auth | Generate, revoke, and toggle access tokens from the GUI |
+| Live Monitoring | Real-time session count, tool call counter, and uptime |
+| Workspace Management | Select any directory to expose; auto-creates if missing |
+| Public IP Detection | Binds to the physical interface to bypass active VPN tunnels |
+| Multilingual UI | Switch between English and Russian at runtime |
+| SSE Transport | Full Server-Sent Events support for streaming MCP responses |
+| Auto Dependencies | `nlohmann/json` and `cpp-httplib` are fetched via CMake FetchContent |
+
+---
+
+### Exposed MCP Tools
+
+The server implements the Model Context Protocol and provides the following tools to connected LLM clients:
+
+| Tool | Description |
+|---|---|
+| `list_directory` | List files and directories at a given path |
+| `read_file` | Read the text content of any file in the workspace |
+| `write_file` | Write or overwrite a file |
+| `start_script` | Launch a script, application, or game (supports background mode) |
+| `search_files` | Recursively search files by name or content |
+| `execute_command` | Run arbitrary shell commands and capture output |
+| `take_screenshot` | Capture the screen and return it as a base64-encoded image |
+
+---
+
+### Requirements
+
+- CMake >= 3.14
+- C++17 compiler (GCC 9+, Clang 10+)
+- wxWidgets >= 3.0 (Core + Base)
+- Python 3 (required only for `take_screenshot`)
+- `curl` (required for public IP detection)
+
+Install wxWidgets on Debian/Ubuntu:
+```bash
+sudo apt install libwxgtk3.2-dev
+```
+
+---
 
 ### Building from Source
 
-**Prerequisites:**
-- CMake (>= 3.14)
-- A modern C++17 compiler (GCC, Clang, or MSVC)
-- wxWidgets (Core & Base)
-- Python 3 (required for the `take_screenshot` tool)
-
-**Build Steps:**
 ```bash
+git clone https://github.com/XayXay-jpg/MCP_Server_C-.git
+cd MCP_Server_C-
 mkdir build && cd build
 cmake ..
-cmake --build .
+cmake --build . -j$(nproc)
 ```
-Dependencies such as `nlohmann/json` and `cpp-httplib` are automatically fetched via CMake FetchContent.
 
-### Running the Server
-Launch the compiled `mcp_manager` executable. From the GUI:
-1. Navigate to the **Workspace** tab to select or create your working directory.
-2. Go to the **Dashboard** and click **START** to initialize the MCP Server.
-3. Monitor active sessions, tools calls, and logs directly from the Dashboard.
+All C++ dependencies (`nlohmann/json`, `cpp-httplib`) are automatically fetched during the CMake configure step. No manual installation required.
 
-### Remote Access (Port Forwarding)
-To make your local MCP Server accessible from the internet (e.g., for remote LLM clients):
-1. Use ngrok: run `ngrok http 3000` in your terminal.
-2. Alternatively, configure port forwarding on your home router to forward port 3000 to your PC's local IP address.
-3. Update your LLM client configuration with the provided external URL/IP.
+---
+
+### Usage
+
+1. Launch the `mcp_manager` executable.
+2. In the **WORKSPACE** tab — select the directory you want to expose to the LLM.
+3. In the **NETWORK** tab — create a Bearer Token and copy the connection string.
+4. On the **DASHBOARD** — click **START** to bring the server online.
+5. Paste the generated connection string into your LLM client configuration (e.g., Claude Desktop, llama.cpp, or any MCP-compatible client).
+
+#### Connecting from a remote network
+
+Configure port forwarding on your router (port `3000` → your machine's local IP).  
+The **Network** tab displays your detected public IP and generates a ready-to-paste connection string with the active token included.
+
+---
+
+### Project Structure
+
+```
+MCP_Server_C-/
+├── mcp/
+│   ├── main.cpp          # HTTP server core, SSE handling, MCP dispatcher
+│   ├── tools.cpp         # MCP tool implementations
+│   ├── network_utils.cpp # Token management, public IP detection
+│   └── utils.cpp         # Shared utilities
+├── gui/
+│   ├── windows.cpp       # Main application window
+│   ├── CustomButton.cpp  # Styled wxButton subclass
+│   ├── LanguageManager.h # Runtime i18n (EN/RU)
+│   └── icons/            # Application icons
+├── CMakeLists.txt
+└── README.md
+```
+
+---
 
 ---
 
 <a name="русский"></a>
-## 🇷🇺 Русский
+## Русский
 
 ### Описание
-**MCP Server Manager** — это надежное графическое приложение и сервер для работы с протоколом Model Context Protocol (MCP). Проект написан на C++ и использует библиотеку wxWidgets для кроссплатформенного пользовательского интерфейса (GUI). Сервер предоставляет большим языковым моделям (LLM) или удаленным клиентам безопасный доступ к локальной рабочей среде, позволяя взаимодействовать с файловой системой, выполнять команды и запускать скрипты в песочнице.
 
-### Основные возможности
-* **Современный GUI**: Построен на базе wxWidgets и оформлен в стильной цветовой палитре (Teal theme).
-* **Управление рабочим пространством**: Удобный выбор, создание и управление активной директорией, доступной для LLM.
-* **Мультиязычность**: Мгновенное переключение между английским и русским интерфейсом.
-* **Живые логи сервера**: Отслеживание вызовов инструментов, ошибок и системных событий в реальном времени.
-* **Проброс портов**: Встроенные инструкции по предоставлению доступа к локальному серверу через ngrok или настройки роутера.
-* **Фоновые процессы**: Асинхронный запуск скриптов и приложений с графическим интерфейсом.
+MCP Server Manager — десктопное приложение для запуска локального [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) сервера с нативным графическим интерфейсом. Написано на C++ с использованием wxWidgets.
 
-### Доступные инструменты для LLM
-Сервер реализует протокол MCP и предоставляет следующие инструменты через JSON-RPC поверх HTTP:
-1. `list_directory`: Просмотр файлов и папок по указанному пути.
-2. `read_file`: Чтение текстового содержимого файла.
-3. `write_file`: Запись или перезапись текстового содержимого в файл.
-4. `start_script`: Запуск скрипта, приложения или игры. Поддерживает фоновое выполнение.
-5. `search_files`: Рекурсивный поиск файлов, содержащих определенную строку в названии.
-6. `execute_command`: Выполнение произвольных терминальных команд в рабочей директории с возвратом вывода.
-7. `take_screenshot`: Создание скриншота основного монитора (использует Python PIL) и возврат в формате base64.
+Приложение позволяет управлять сервером, токенами доступа, рабочим пространством и наблюдать за метриками в реальном времени — без использования командной строки.
+
+---
+
+### Возможности
+
+| Функция | Описание |
+|---|---|
+| Нативный GUI | На базе wxWidgets, без Electron и браузерных движков |
+| Bearer Token аутентификация | Создание, отзыв и переключение токенов из интерфейса |
+| Живой мониторинг | Счётчики сессий, вызовов инструментов и аптайм в реальном времени |
+| Управление директорией | Любая папка на диске; создаётся автоматически при отсутствии |
+| Определение публичного IP | Запрос идёт напрямую через физический интерфейс, минуя VPN |
+| Мультиязычный интерфейс | Переключение между русским и английским без перезапуска |
+| SSE транспорт | Поддержка Server-Sent Events для потоковой передачи ответов MCP |
+| Авто-зависимости | `nlohmann/json` и `cpp-httplib` загружаются через CMake FetchContent |
+
+---
+
+### Инструменты MCP
+
+| Инструмент | Описание |
+|---|---|
+| `list_directory` | Список файлов и папок по указанному пути |
+| `read_file` | Чтение содержимого файла |
+| `write_file` | Запись или перезапись файла |
+| `start_script` | Запуск скрипта, приложения или игры (в т.ч. в фоне) |
+| `search_files` | Рекурсивный поиск файлов по имени или содержимому |
+| `execute_command` | Выполнение команд в оболочке с возвратом вывода |
+| `take_screenshot` | Снимок экрана в формате base64 |
+
+---
+
+### Требования
+
+- CMake >= 3.14
+- Компилятор C++17 (GCC 9+, Clang 10+)
+- wxWidgets >= 3.0 (Core + Base)
+- Python 3 (только для `take_screenshot`)
+- `curl` (для определения публичного IP)
+
+Установка wxWidgets на Debian/Ubuntu:
+```bash
+sudo apt install libwxgtk3.2-dev
+```
+
+---
 
 ### Сборка из исходников
 
-**Требования:**
-- CMake (>= 3.14)
-- Современный компилятор C++17 (GCC, Clang или MSVC)
-- wxWidgets (Core & Base)
-- Python 3 (требуется для работы инструмента `take_screenshot`)
-
-**Шаги сборки:**
 ```bash
+git clone https://github.com/XayXay-jpg/MCP_Server_C-.git
+cd MCP_Server_C-
 mkdir build && cd build
 cmake ..
-cmake --build .
+cmake --build . -j$(nproc)
 ```
-Зависимости, такие как `nlohmann/json` и `cpp-httplib`, будут автоматически загружены через CMake FetchContent.
 
-### Запуск сервера
-Запустите скомпилированный файл `mcp_manager`. В графическом интерфейсе:
-1. Перейдите на вкладку **WORKSPACE** (ДИРЕКТОРИЯ) для выбора или создания рабочей папки.
-2. На вкладке **DASHBOARD** (ДЭШБОРД) нажмите **START** (СТАРТ), чтобы запустить MCP сервер.
-3. Отслеживайте активные сессии, вызовы инструментов и логи прямо из дэшборда.
+Зависимости C++ (`nlohmann/json`, `cpp-httplib`) загружаются автоматически при конфигурировании CMake.
 
-### Удаленный доступ (Проброс портов)
-Чтобы сделать ваш локальный MCP-сервер доступным из интернета (например, для удаленных клиентов LLM):
-1. Используйте ngrok: выполните команду `ngrok http 3000` в вашем терминале.
-2. Или настройте проброс порта 3000 на вашем домашнем роутере на локальный IP-адрес этого ПК.
-3. Обновите конфигурацию вашего клиента LLM, указав полученный внешний URL/IP.
+---
+
+### Использование
+
+1. Запустите исполняемый файл `mcp_manager`.
+2. Во вкладке **ДИРЕКТОРИЯ** — выберите папку, которую хотите открыть для LLM.
+3. Во вкладке **СЕТЬ** — создайте Bearer Token и скопируйте строку подключения.
+4. На **ДЭШБОРДЕ** — нажмите **ЗАПУСТИТЬ**.
+5. Вставьте строку подключения в конфигурацию вашего LLM-клиента.
+
+#### Подключение из другой сети
+
+Настройте проброс порта `3000` на своём роутере на локальный IP этой машины.  
+Вкладка **СЕТЬ** автоматически определяет публичный IP и формирует готовую строку подключения с активным токеном.
+
+---
+
+### Структура проекта
+
+```
+MCP_Server_C-/
+├── mcp/
+│   ├── main.cpp          # HTTP сервер, SSE, диспетчер MCP
+│   ├── tools.cpp         # Реализация инструментов MCP
+│   ├── network_utils.cpp # Токены, определение публичного IP
+│   └── utils.cpp         # Общие утилиты
+├── gui/
+│   ├── windows.cpp       # Главное окно приложения
+│   ├── CustomButton.cpp  # Стилизованный подкласс wxButton
+│   ├── LanguageManager.h # Локализация (RU/EN)
+│   └── icons/            # Иконки приложения
+├── CMakeLists.txt
+└── README.md
+```
+
+---
+
+

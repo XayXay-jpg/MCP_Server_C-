@@ -56,18 +56,18 @@ private:
         );
 
         // RU
-        dictionary["RU"]["DASHBOARD"] = wxString::FromUTF8("DASHBOARD");
-        dictionary["RU"]["WORKSPACE"] = wxString::FromUTF8("WORKSPACE");
-        dictionary["RU"]["SETTINGS"] = wxString::FromUTF8("SETTINGS");
-        dictionary["RU"]["LANGUAGE"] = wxString::FromUTF8("LANGUAGE");
-        dictionary["RU"]["NETWORK"] = wxString::FromUTF8("NETWORK");
-        dictionary["RU"]["LOGS"] = wxString::FromUTF8("LOGS");
-        dictionary["RU"]["SERVER_MANAGER"] = wxString::FromUTF8("MCP SERVER MANAGER");
+        dictionary["RU"]["DASHBOARD"] = wxString::FromUTF8("ДЭШБОРД");
+        dictionary["RU"]["WORKSPACE"] = wxString::FromUTF8("ДИРЕКТОРИЯ");
+        dictionary["RU"]["SETTINGS"] = wxString::FromUTF8("НАСТРОЙКИ");
+        dictionary["RU"]["LANGUAGE"] = wxString::FromUTF8("ЯЗЫК");
+        dictionary["RU"]["NETWORK"] = wxString::FromUTF8("СЕТЬ");
+        dictionary["RU"]["LOGS"] = wxString::FromUTF8("ЛОГИ");
+        dictionary["RU"]["SERVER_MANAGER"] = wxString::FromUTF8("МЕНЕДЖЕР MCP СЕРВЕРА");
         dictionary["RU"]["STATUS"] = wxString::FromUTF8("Статус: ");
-        dictionary["RU"]["OFFLINE"] = wxString::FromUTF8("OFFLINE");
-        dictionary["RU"]["ONLINE"] = wxString::FromUTF8("ONLINE");
-        dictionary["RU"]["START_BTN"] = wxString::FromUTF8("START");
-        dictionary["RU"]["STOP_BTN"] = wxString::FromUTF8("STOP");
+        dictionary["RU"]["OFFLINE"] = wxString::FromUTF8("ВЫКЛ");
+        dictionary["RU"]["ONLINE"] = wxString::FromUTF8("ВКЛ");
+        dictionary["RU"]["START_BTN"] = wxString::FromUTF8("ЗАПУСТИТЬ");
+        dictionary["RU"]["STOP_BTN"] = wxString::FromUTF8("ОСТАНОВИТЬ");
         dictionary["RU"]["LOGS_HEADER"] = wxString::FromUTF8("ЛОГИ СЕРВЕРА");
         dictionary["RU"]["STATS_SESSIONS"] = wxString::FromUTF8("Активные сессии: ");
         dictionary["RU"]["STATS_ERRORS"] = wxString::FromUTF8("Ошибки: ");
