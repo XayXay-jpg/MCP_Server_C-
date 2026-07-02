@@ -170,6 +170,11 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                     if (req.has_header("X-MCP-Signature")) {
                         std::string sig = req.get_header_value("X-MCP-Signature");
                         std::string expected_sig = generate_hmac_sha256(sm.parentEncryptionKey, req.body);
+                        mcp_log("[Auth] Child parentEncryptionKey: " + sm.parentEncryptionKey);
+                        mcp_log("[Auth] Child req.body length: " + std::to_string(req.body.length()));
+                        mcp_log("[Auth] Child expected_sig: " + expected_sig);
+                        mcp_log("[Auth] Child received_sig: " + sig);
+                        
                         if (sig == expected_sig) {
                             token_valid = true;
                         } else {

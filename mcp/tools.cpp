@@ -512,6 +512,12 @@ json handle_tools_call(const json& request, const TokenInfo& token) {
             std::string req_body = enc_req.dump();
             std::string signature = generate_hmac_sha256(targetNode.encryption_key, req_body);
             
+            mcp_log("[Proxy] targetNode.id: " + targetNode.id);
+            mcp_log("[Proxy] targetNode.master_token: " + targetNode.master_token);
+            mcp_log("[Proxy] targetNode.encryption_key: " + targetNode.encryption_key);
+            mcp_log("[Proxy] req_body length: " + std::to_string(req_body.length()));
+            mcp_log("[Proxy] generated signature: " + signature);
+            
             std::string ip = targetNode.ip_address;
             if (ip.find("http://") == 0) ip = ip.substr(7);
             if (ip.find("https://") == 0) ip = ip.substr(8);
