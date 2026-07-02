@@ -9,6 +9,9 @@
 #include <chrono>
 #include <thread>
 #include <httplib.h>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 using json = nlohmann::json;
 
@@ -163,7 +166,12 @@ bool ClusterManager::ApproveNode(const std::string& id) {
             // Send a join request so the parent knows we are alive and configures us.
             const char* hn = std::getenv("HOSTNAME");
             if (!hn) hn = std::getenv("COMPUTERNAME");
-            std::string child_hostname = hn ? hn : "UnknownNode";
+            std::string child_hostname = hn ? hn : "";
+            if (child_hostname.empty()) {
+                char buf[256] = {};
+                if (gethostname(buf, sizeof(buf)) == 0) child_hostname = buf;
+            }
+            if (child_hostname.empty()) child_hostname = "UnknownNode";
             
             std::string child_platform =
 #ifdef _WIN32
@@ -221,7 +229,12 @@ bool ClusterManager::ApproveNode(const std::string& id) {
         // Gather parent metadata to send to child
         const char* hn_env = std::getenv("HOSTNAME");
         if (!hn_env) hn_env = std::getenv("COMPUTERNAME");
-        std::string my_hostname = hn_env ? hn_env : "ParentNode";
+        std::string my_hostname = hn_env ? hn_env : "";
+        if (my_hostname.empty()) {
+            char buf[256] = {};
+            if (gethostname(buf, sizeof(buf)) == 0) my_hostname = buf;
+        }
+        if (my_hostname.empty()) my_hostname = "ParentNode";
         
 #ifdef _WIN32
         std::string my_platform = "Windows";
@@ -244,12 +257,14 @@ bool ClusterManager::ApproveNode(const std::string& id) {
         }
         std::string encrypted_tokens = encrypt_aes256(final_ek, tokens_array.dump());
 
+        extern int g_server_port;
         json req = {
             {"master_token", final_mt},
             {"encryption_key", final_ek},
             {"parent_hostname", my_hostname},
             {"parent_platform", my_platform},
             {"parent_ip", ip},
+            {"parent_port", g_server_port},
             {"parent_version", "0.1.8"},
             {"synced_tokens_enc", encrypted_tokens}
         };

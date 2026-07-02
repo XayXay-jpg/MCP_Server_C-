@@ -108,8 +108,11 @@ void stop_mcp_server() {
     }
 }
 
+int g_server_port = 3000;
+
 int run_mcp_server(int port, const std::string& default_workspace, const std::string& auth_user, const std::string& auth_pass) {
     srand(time(NULL));
+    g_server_port = port;
     
     // Initialize cluster nodes and reconnect if necessary
     ClusterManager::GetInstance().LoadNodes();
@@ -643,18 +646,25 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                 
                 if (g_notify_callback) g_notify_callback("Cluster Configuration", "Received configuration from Parent node '" + parent_hostname + "'.");
                 
-                // Store parent node with all metadata
+                // Store parent node with all metadata — build ip:port correctly
+                int parent_port = data.value("parent_port", 3000);
+                std::string parent_addr = parent_ip + ":" + std::to_string(parent_port);
                 std::string dummyId;
-                ClusterManager::GetInstance().RegisterNodeRequest("parent", parent_ip, parent_hostname, data.value("parent_platform", "Unknown"), dummyId);
+                ClusterManager::GetInstance().RegisterNodeRequest("parent", parent_addr, parent_hostname, data.value("parent_platform", "Unknown"), dummyId);
                 {
-                    ClusterManager::GetInstance().UpdateNodeMetadata("parent", data.value("parent_platform", ""), data.value("parent_ip", parent_ip), data.value("parent_version", ""), true);
+                    ClusterManager::GetInstance().UpdateNodeMetadata("parent", data.value("parent_platform", ""), parent_addr, data.value("parent_version", ""), true);
                 }
                 ClusterManager::GetInstance().SetNodeStatus("parent", "connected");
                 if (g_refresh_cluster_callback) g_refresh_cluster_callback();
                 
                 const char* hn = std::getenv("HOSTNAME");
                 if (!hn) hn = std::getenv("COMPUTERNAME");
-                std::string hostnameStr = hn ? hn : "UnknownNode";
+                std::string hostnameStr = hn ? hn : "";
+                if (hostnameStr.empty()) {
+                    char buf[256] = {};
+                    if (gethostname(buf, sizeof(buf)) == 0) hostnameStr = buf;
+                }
+                if (hostnameStr.empty()) hostnameStr = "UnknownNode";
                 std::string platformStr =
 #ifdef _WIN32
                 "Windows";
