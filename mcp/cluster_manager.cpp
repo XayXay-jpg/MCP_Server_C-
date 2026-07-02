@@ -4,6 +4,7 @@
 #include <chrono>
 #include <thread>
 #include <httplib.h>
+#include "utils.h"
 
 using json = nlohmann::json;
 
@@ -102,14 +103,38 @@ bool ClusterManager::ApproveNode(const std::string& id) {
             if (ip.find("http://") == 0) ip = ip.substr(7);
             if (ip.find("https://") == 0) ip = ip.substr(8);
             
-            std::thread([ip, mt = n.master_token, ek = n.encryption_key]() {
+            std::thread([id, ip, mt = n.master_token, ek = n.encryption_key]() {
                 httplib::Client cli("http://" + ip);
                 cli.set_connection_timeout(5, 0);
                 json req = {
                     {"master_token", mt},
                     {"encryption_key", ek}
                 };
-                cli.Post("/cluster/configure", req.dump(), "application/json");
+                if (auto res = cli.Post("/cluster/configure", req.dump(), "application/json")) {
+                    if (res->status == 200) {
+                        try {
+                            json resp = json::parse(res->body);
+                            if (resp.contains("hostname")) {
+                                std::string hn = resp["hostname"];
+                                std::string pt = resp.value("platform", "Unknown");
+                                
+                                std::lock_guard<std::mutex> lk(ClusterManager::GetInstance().mtx);
+                                for (auto& node : ClusterManager::GetInstance().nodes) {
+                                    if (node.id == id) {
+                                        node.hostname = hn;
+                                        node.platform = pt;
+                                        ClusterManager::GetInstance().SaveNodes();
+                                        break;
+                                    }
+                                }
+                                
+                                if (g_refresh_cluster_callback) {
+                                    g_refresh_cluster_callback();
+                                }
+                            }
+                        } catch (...) {}
+                    }
+                }
             }).detach();
             
             return true;

@@ -196,6 +196,7 @@ private:
     wxCheckBox* chkAutoUpdate = nullptr;
     CustomButton* btnCheckUpdates = nullptr;
     wxStaticText* lblUpdateStatus = nullptr;
+    wxStaticText* lblCurrentVersion = nullptr;
     
     // Tray Icon
     wxTaskBarIcon* trayIcon = nullptr;

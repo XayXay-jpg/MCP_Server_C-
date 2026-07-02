@@ -469,8 +469,26 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                     sm.Save();
                     mcp_log("[Info] Node successfully configured by Parent.");
                     if (g_notify_callback) g_notify_callback("Cluster Configuration", "Received configuration from Parent node.");
+                    
+                    const char* hn = std::getenv("HOSTNAME");
+                    if (!hn) hn = std::getenv("COMPUTERNAME");
+                    std::string hostnameStr = hn ? hn : "UnknownNode";
+                    std::string platformStr =
+#ifdef _WIN32
+                    "Windows";
+#elif defined(__APPLE__)
+                    "macOS";
+#else
+                    "Linux";
+#endif
+
+                    json resp;
+                    resp["status"] = "ok";
+                    resp["hostname"] = hostnameStr;
+                    resp["platform"] = platformStr;
+
                     res.status = 200;
-                    res.set_content("{\"status\":\"ok\"}", "application/json");
+                    res.set_content(resp.dump(), "application/json");
                     return;
                 } else {
                     res.status = 403;

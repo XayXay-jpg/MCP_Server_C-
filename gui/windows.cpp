@@ -52,6 +52,8 @@ wxBitmap GetBitmapFromBase64(const std::string& b64) {
 #include <wx/msw/registry.h>
 #endif
 
+const std::string APP_VERSION = "1.0.0-beta";
+
 wxDEFINE_EVENT(wxEVT_SERVER_LOG, wxThreadEvent);
 wxDEFINE_EVENT(wxEVT_SERVER_NOTIFY, wxThreadEvent);
 
@@ -189,6 +191,12 @@ Windows::Windows(const wxString& title) : wxFrame(NULL, wxID_ANY, title, wxDefau
         wxThreadEvent* event = new wxThreadEvent(wxEVT_SERVER_NOTIFY);
         event->SetString(title + "|||" + msg);
         wxQueueEvent(this, event);
+    };
+    
+    g_refresh_cluster_callback = [this]() {
+        CallAfter([this]() {
+            RefreshNodesList();
+        });
     };
     
     Bind(wxEVT_SERVER_NOTIFY, &Windows::OnServerNotify, this);
@@ -911,6 +919,10 @@ void Windows::SetupUI() {
 
     // --- Updates ---
     addSectionHeader(lang.GetString("GS_UPDATES"), lblSecUpdates);
+    
+    lblCurrentVersion = new wxStaticText(pageGlobalSettings, wxID_ANY, lang.GetString("LBL_VERSION") + APP_VERSION);
+    lblCurrentVersion->SetForegroundColour(wxColour("#A1A1AA"));
+    
     chkAutoUpdate = new wxCheckBox(pageGlobalSettings, wxID_ANY, lang.GetString("GS_AUTO_UPDATE"));
     chkAutoUpdate->SetValue(sm.autoUpdate);
     chkAutoUpdate->SetForegroundColour(fgColor);
@@ -927,6 +939,7 @@ void Windows::SetupUI() {
     updRow->Add(btnCheckUpdates, 0, wxRIGHT | wxALIGN_CENTER_VERTICAL, 10);
     updRow->Add(lblUpdateStatus, 0, wxALIGN_CENTER_VERTICAL);
 
+    wsSizer->Add(lblCurrentVersion, 0, wxBOTTOM, 5);
     wsSizer->Add(chkAutoUpdate, 0, wxBOTTOM, 10);
     wsSizer->Add(updRow, 0, wxBOTTOM, 10);
 
@@ -1251,6 +1264,7 @@ void Windows::UpdateLanguage() {
     chkMaskSecrets->SetLabel(lang.GetString("GS_MASK_SECRETS"));
     
     chkAutoUpdate->SetLabel(lang.GetString("GS_AUTO_UPDATE"));
+    if (lblCurrentVersion) lblCurrentVersion->SetLabel(lang.GetString("LBL_VERSION") + APP_VERSION);
     btnCheckUpdates->SetLabel(lang.GetString("GS_CHECK_UPDATES"));
     
     if (lblAppMode) lblAppMode->SetLabel(lang.GetString("GS_APP_MODE"));
@@ -1378,16 +1392,18 @@ void Windows::OnAddNode(wxCommandEvent& event) {
 void Windows::RefreshNodesList() {
     listNodes->DeleteAllItems();
     
-    // We will populate this with actual nodes later when we integrate ClusterManager
+    auto nodes = ClusterManager::GetInstance().GetNodes();
     long idx = 0;
     
-    // Mock data for now to visualize the UI
-    listNodes->InsertItem(idx, "local_node");
-    listNodes->SetItem(idx, 1, "Marat-PC");
-    listNodes->SetItem(idx, 2, "127.0.0.1:8080");
-    listNodes->SetItem(idx, 3, "Connected");
-    listNodes->SetItem(idx, 4, "Linux");
-    listNodes->SetItemBackgroundColour(idx, wxColour("#18181B"));
+    for (const auto& node : nodes) {
+        listNodes->InsertItem(idx, node.id);
+        listNodes->SetItem(idx, 1, node.hostname);
+        listNodes->SetItem(idx, 2, node.ip_address);
+        listNodes->SetItem(idx, 3, node.status);
+        listNodes->SetItem(idx, 4, node.platform);
+        listNodes->SetItemBackgroundColour(idx, wxColour("#18181B"));
+        idx++;
+    }
 }
 
 void Windows::OnTabOverview(wxCommandEvent& event) {
@@ -2046,10 +2062,40 @@ void Windows::OnClearCache(wxCommandEvent& event) {
 }
 
 void Windows::OnCheckUpdates(wxCommandEvent& event) {
-    lblUpdateStatus->SetLabel("Checking...");
+    auto& lang = LanguageManager::Get();
+    lblUpdateStatus->SetLabel(lang.GetString("LBL_CHECKING"));
     wxYield();
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    lblUpdateStatus->SetLabel("You are using the latest version.");
+
+    wxArrayString output;
+    wxArrayString errors;
+    long res = wxExecute("curl -s https://api.github.com/repos/XayXay-jpg/MCP_Server_C-/releases/latest", output, errors, wxEXEC_SYNC | wxEXEC_NODISABLE);
+
+    std::string jsonStr;
+    for (const auto& line : output) {
+        jsonStr += line.ToStdString() + "\n";
+    }
+
+    try {
+        if (!jsonStr.empty()) {
+            nlohmann::json j = nlohmann::json::parse(jsonStr);
+            if (j.contains("tag_name")) {
+                std::string latest_ver = j["tag_name"].get<std::string>();
+                if (latest_ver == "v" + APP_VERSION || latest_ver == APP_VERSION) {
+                    lblUpdateStatus->SetLabel(lang.GetString("UPD_LATEST"));
+                } else {
+                    lblUpdateStatus->SetLabel(lang.GetString("UPD_AVAILABLE") + latest_ver);
+                }
+            } else if (j.contains("message") && j["message"] == "Not Found") {
+                lblUpdateStatus->SetLabel(lang.GetString("UPD_NONE"));
+            } else {
+                lblUpdateStatus->SetLabel(lang.GetString("UPD_ERR_PARSE"));
+            }
+        } else {
+            lblUpdateStatus->SetLabel(lang.GetString("UPD_ERR_NET"));
+        }
+    } catch (...) {
+        lblUpdateStatus->SetLabel(lang.GetString("UPD_ERR_PARSE"));
+    }
 }
 
 void Windows::OnCloseWindow(wxCloseEvent& event) {

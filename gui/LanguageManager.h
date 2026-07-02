@@ -151,6 +151,12 @@ private:
         dictionary["EN"]["BTN_REJECT"] = wxString::FromUTF8("Remove Node");
         dictionary["EN"]["TOOLS_MANAGEMENT"] = wxString::FromUTF8("TOOLS MANAGEMENT");
         dictionary["EN"]["TOOLS_SUB"] = wxString::FromUTF8("Configure and manage active tool integrations across the system");
+        dictionary["EN"]["LBL_VERSION"] = wxString::FromUTF8("Current Version: ");
+        dictionary["EN"]["UPD_LATEST"] = wxString::FromUTF8("You are using the latest version.");
+        dictionary["EN"]["UPD_AVAILABLE"] = wxString::FromUTF8("New version available: ");
+        dictionary["EN"]["UPD_NONE"] = wxString::FromUTF8("No releases found on GitHub.");
+        dictionary["EN"]["UPD_ERR_NET"] = wxString::FromUTF8("Failed to check for updates (network error).");
+        dictionary["EN"]["UPD_ERR_PARSE"] = wxString::FromUTF8("Error parsing update information.");
 
         // RU
         dictionary["RU"]["DASHBOARD"] = wxString::FromUTF8("ДЭШБОРД");
@@ -273,6 +279,13 @@ private:
         dictionary["RU"]["LBL_SERVER_LOGS"] = wxString::FromUTF8("СЕРВЕРНЫЕ ЛОГИ");
         dictionary["RU"]["LBL_UNKNOWN"] = wxString::FromUTF8("Неизвестно");
         dictionary["RU"]["LBL_NOT_DETECTED"] = wxString::FromUTF8("Не обнаружено");
+        
+        dictionary["RU"]["LBL_VERSION"] = wxString::FromUTF8("Текущая версия: ");
+        dictionary["RU"]["UPD_LATEST"] = wxString::FromUTF8("У вас установлена последняя версия.");
+        dictionary["RU"]["UPD_AVAILABLE"] = wxString::FromUTF8("Доступна новая версия: ");
+        dictionary["RU"]["UPD_NONE"] = wxString::FromUTF8("Релизы на GitHub не найдены.");
+        dictionary["RU"]["UPD_ERR_NET"] = wxString::FromUTF8("Ошибка проверки обновлений (ошибка сети).");
+        dictionary["RU"]["UPD_ERR_PARSE"] = wxString::FromUTF8("Ошибка разбора информации об обновлении.");
     }
 
     std::string current_lang = "RU";
