@@ -152,7 +152,7 @@ bool ClusterManager::ApproveNode(const std::string& id) {
     
     std::thread([id, ip, mt, ek]() {
         std::string host = ip;
-        int port = 80;
+        int port = 3000; // default MCP port
         size_t colon_pos = host.find_last_of(':');
         if (colon_pos != std::string::npos) {
             try {
