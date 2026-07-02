@@ -34,7 +34,7 @@ void SettingsManager::Load() {
             disabled_tools = j.value("disabled_tools", std::vector<std::string>{});
             logRetention = j.value("logRetention", "30 Days");
             theme = j.value("theme", "Dark");
-            language = j.value("language", "RU");
+            language = j.value("language", "EN");
             compactMode = j.value("compactMode", false);
             appLock = j.value("appLock", false);
             appPasswordHash = j.value("appPasswordHash", "");

@@ -1,10 +1,12 @@
 #include "cluster_manager.h"
+#include "utils.h"
+#include "network_utils.h"
+#include "crypto_utils.h"
 #include <fstream>
-#include <fstream>
+#include <iostream>
 #include <chrono>
 #include <thread>
 #include <httplib.h>
-#include "utils.h"
 
 using json = nlohmann::json;
 
@@ -159,13 +161,27 @@ bool ClusterManager::ApproveNode(const std::string& id) {
         std::string my_platform = "Linux";
 #endif
         
+        auto tokens = NetworkUtils::LoadTokens();
+        json tokens_array = json::array();
+        for (const auto& t : tokens) {
+            tokens_array.push_back({
+                {"id", t.id},
+                {"name", t.name},
+                {"raw_token", t.raw_token},
+                {"creation_date", t.creation_date},
+                {"active", t.active}
+            });
+        }
+        std::string encrypted_tokens = encrypt_aes256(ek, tokens_array.dump());
+
         json req = {
             {"master_token", mt},
             {"encryption_key", ek},
             {"parent_hostname", my_hostname},
             {"parent_platform", my_platform},
             {"parent_ip", ip},
-            {"parent_version", "0.1.8"}
+            {"parent_version", "0.1.8"},
+            {"synced_tokens_enc", encrypted_tokens}
         };
         if (auto res = cli.Post("/cluster/configure", req.dump(), "application/json")) {
             if (res->status == 200) {
@@ -243,7 +259,28 @@ bool ClusterManager::UpdateNodeId(const std::string& oldId, const std::string& n
     for (auto& n : nodes) {
         if (n.id == oldId) {
             n.id = newId;
+            n.hostname = newId; // Update hostname for GUI display
             SaveNodes();
+            
+            // Also update token permissions to prevent access loss
+            auto tokens = NetworkUtils::LoadTokens();
+            bool tokens_changed = false;
+            for (auto& t : tokens) {
+                if (t.permissions.allowed_servers.count(oldId)) {
+                    t.permissions.allowed_servers[newId] = t.permissions.allowed_servers[oldId];
+                    t.permissions.allowed_servers.erase(oldId);
+                    tokens_changed = true;
+                }
+                if (t.permissions.server_workspaces.count(oldId)) {
+                    t.permissions.server_workspaces[newId] = t.permissions.server_workspaces[oldId];
+                    t.permissions.server_workspaces.erase(oldId);
+                    tokens_changed = true;
+                }
+            }
+            if (tokens_changed) {
+                NetworkUtils::SaveTokens(tokens);
+            }
+            
             return true;
         }
     }

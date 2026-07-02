@@ -24,8 +24,10 @@ public:
 
     void RefreshTopology();
 
-    // Callbacks for actions
-    std::function<void(const std::string& nodeId, ClusterTopologyAction action)> onAction;
+    // Callback for right-click menu actions (Node ID, Action)
+    std::function<void(const std::string&, ClusterTopologyAction)> onAction;
+
+    void RenameNodeInUI(const std::string& oldId, const std::string& newId);
 
 private:
     struct NodeRect {

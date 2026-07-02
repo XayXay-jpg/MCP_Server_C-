@@ -7,8 +7,10 @@ mcp_manager
 *.o
 *.a
 
-# Tokens file — contains real Bearer tokens, do NOT commit
+# Tokens and Settings — contain real Bearer tokens and local IPs, do NOT commit
 tokens.json
+settings.json
+cluster.json
 
 # Editor / IDE
 .vscode/

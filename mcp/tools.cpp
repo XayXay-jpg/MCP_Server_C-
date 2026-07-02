@@ -142,11 +142,11 @@ json get_available_tools(const TokenInfo& token) {
                 {"type", "string"},
                 {"enum", allowed_nodes}
             }},
-            {"description", "Optional list of server IDs to execute this tool on simultaneously."}
+            {"description", "Target servers to execute this tool on. CRITICAL: You can and SHOULD specify MULTIPLE servers in this array in a SINGLE tool call if you need to perform the same action across multiple devices simultaneously (e.g. [\"local\", \"Mac Server\"]). Do NOT make separate identical tool calls for each server! Allowed servers for your token: "}
         };
         
         std::string desc = tool["inputSchema"]["properties"]["target_server_ids"]["description"];
-        desc += " Allowed servers for your token: [";
+        desc += "[";
         for (size_t i = 0; i < allowed_nodes.size(); i++) {
             desc += allowed_nodes[i] + (i == allowed_nodes.size() - 1 ? "" : ", ");
         }
@@ -500,8 +500,15 @@ json handle_tools_call(const json& request, const TokenInfo& token) {
             json child_req = request;
             child_req["params"]["arguments"].erase("target_server_ids");
             child_req["params"]["arguments"]["target_server_id"] = "local";
+            child_req["_forwarded_token"] = token.raw_token; // Put inside encrypted payload
             
-            std::string req_body = child_req.dump();
+            std::string plain_body = child_req.dump();
+            std::string encrypted_body = encrypt_aes256(targetNode.encryption_key, plain_body);
+            
+            json enc_req = {
+                {"encrypted_payload", encrypted_body}
+            };
+            std::string req_body = enc_req.dump();
             std::string signature = generate_hmac_sha256(targetNode.encryption_key, req_body);
             
             std::string ip = targetNode.ip_address;
@@ -521,7 +528,17 @@ json handle_tools_call(const json& request, const TokenInfo& token) {
             auto res = cli.Post("/mcp", headers, req_body, "application/json");
             if (res && res->status == 200) {
                 try {
-                    res_json = json::parse(res->body);
+                    json parsed = json::parse(res->body);
+                    if (parsed.contains("encrypted_payload")) {
+                        std::string dec = decrypt_aes256(targetNode.encryption_key, parsed.value("encrypted_payload", ""));
+                        if (!dec.empty()) {
+                            res_json = json::parse(dec);
+                        } else {
+                            res_json = parsed;
+                        }
+                    } else {
+                        res_json = parsed;
+                    }
                 } catch (const std::exception& e) {
                     combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "] Error parsing response: " + std::string(e.what())}});
                     continue;

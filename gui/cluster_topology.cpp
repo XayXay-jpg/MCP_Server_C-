@@ -19,6 +19,13 @@ BEGIN_EVENT_TABLE(ClusterTopologyPanel, wxPanel)
     EVT_TIMER(wxID_ANY, ClusterTopologyPanel::OnTimer)
 END_EVENT_TABLE()
 
+void ClusterTopologyPanel::RenameNodeInUI(const std::string& oldId, const std::string& newId) {
+    if (m_customPositions.count(oldId)) {
+        m_customPositions[newId] = m_customPositions[oldId];
+        m_customPositions.erase(oldId);
+    }
+}
+
 static wxColour StatusColor(const std::string& status) {
     if (status == "connected") return wxColour(34, 197, 94);   // green-500
     if (status == "connecting...") return wxColour(251, 191, 36); // amber-400

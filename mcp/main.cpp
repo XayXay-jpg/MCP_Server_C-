@@ -362,6 +362,46 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
         auto& sm_mode = SettingsManager::Get();
         bool is_child_mode = !sm_mode.parentMasterToken.empty();
         
+        // Decrypt full payload if present
+        std::string actual_body = req.body;
+        bool was_encrypted = false;
+        
+        if (is_child_mode) {
+            try {
+                json peek = json::parse(req.body);
+                if (peek.contains("encrypted_payload")) {
+                    std::string enc = peek.value("encrypted_payload", "");
+                    std::string dec = decrypt_aes256(sm_mode.parentEncryptionKey, enc);
+                    if (!dec.empty()) {
+                        actual_body = dec;
+                        was_encrypted = true;
+                        
+                        // Extract forwarded user token from decrypted payload
+                        json decrypted_peek = json::parse(actual_body);
+                        if (decrypted_peek.contains("_forwarded_token")) {
+                            token_provided = decrypted_peek.value("_forwarded_token", "");
+                            has_token = false; // Reset to re-fetch below
+                        }
+                    }
+                }
+            } catch (...) {}
+        }
+        
+        if (!token_provided.empty() && !has_token) {
+            auto tokens = NetworkUtils::LoadTokens();
+            for (const auto& t : tokens) {
+                if (t.raw_token == token_provided) {
+                    current_token = t;
+                    has_token = true;
+                    token_display = t.name.empty() ? t.id : t.name;
+                    std::string masked = t.raw_token.length() > 8 ? 
+                        (t.raw_token.substr(0, 4) + "..." + t.raw_token.substr(t.raw_token.length() - 4)) : "***";
+                    token_display += " [" + masked + "]";
+                    break;
+                }
+            }
+        }
+        
         mcp_log("[Info] POST Request from Token: " + token_display);
         mcp_log("[Info] Raw Payload: " + req.body);
         
@@ -383,7 +423,13 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
         }
 
         try {
-            json request = json::parse(req.body);
+            json request = json::parse(actual_body);
+            if (request.contains("_forwarded_token_enc")) {
+                request.erase("_forwarded_token_enc");
+            }
+            if (request.contains("_forwarded_token")) {
+                request.erase("_forwarded_token");
+            }
             json result;
             
             if (!request.contains("jsonrpc") || request["jsonrpc"] != "2.0") {
@@ -416,7 +462,11 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                 // Если это прямой POST-запрос (Open WebUI Streamable HTTP), возвращаем JSON сразу в ответе!
                 res.status = 200;
                 if (!result.is_null()) {
-                    res.set_content(result.dump(), "application/json");
+                    std::string res_str = result.dump();
+                    if (was_encrypted) {
+                        res_str = json{{"encrypted_payload", encrypt_aes256(sm_mode.parentEncryptionKey, res_str)}}.dump();
+                    }
+                    res.set_content(res_str, "application/json");
                 } else {
                     res.set_content("{}", "application/json");
                 }
@@ -507,6 +557,39 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                 sm.parentEncryptionKey = data.value("encryption_key", "");
                 sm.Save();
                 mcp_log("[Info] Node successfully configured by Parent.");
+                
+                if (data.contains("synced_tokens_enc")) {
+                    std::string enc = data.value("synced_tokens_enc", "");
+                    std::string decrypted = decrypt_aes256(sm.parentEncryptionKey, enc);
+                    if (!decrypted.empty()) {
+                        try {
+                            json tokens_json = json::parse(decrypted);
+                            auto tokens = NetworkUtils::LoadTokens();
+                            // Only update active status and properties, don't overwrite local permissions
+                            for (const auto& tj : tokens_json) {
+                                bool found = false;
+                                for (auto& t : tokens) {
+                                    if (t.raw_token == tj.value("raw_token", "")) {
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                                if (!found) {
+                                    TokenInfo nt;
+                                    nt.id = tj.value("id", "");
+                                    nt.name = tj.value("name", "");
+                                    nt.raw_token = tj.value("raw_token", "");
+                                    nt.creation_date = tj.value("creation_date", "");
+                                    nt.active = tj.value("active", true);
+                                    tokens.push_back(nt);
+                                }
+                            }
+                            NetworkUtils::SaveTokens(tokens);
+                            mcp_log("[Info] Synchronized tokens from parent.");
+                        } catch (...) {}
+                    }
+                }
+                
                 if (g_notify_callback) g_notify_callback("Cluster Configuration", "Received configuration from Parent node '" + parent_hostname + "'.");
                 
                 // Store parent node with all metadata

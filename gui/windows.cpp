@@ -778,7 +778,10 @@ void Windows::SetupUI() {
         case CTA_RENAME: {
             wxTextEntryDialog dlg(this, "Enter new name for node '" + wxString(nodeId) + "':", "Rename Node", wxString(nodeId));
             if (dlg.ShowModal() == wxID_OK) {
-                ClusterManager::GetInstance().UpdateNodeId(nodeId, dlg.GetValue().ToStdString());
+                std::string newId = dlg.GetValue().ToStdString();
+                if (ClusterManager::GetInstance().UpdateNodeId(nodeId, newId)) {
+                    topoPanel->RenameNodeInUI(nodeId, newId);
+                }
                 topoPanel->RefreshTopology();
             }
             break;
