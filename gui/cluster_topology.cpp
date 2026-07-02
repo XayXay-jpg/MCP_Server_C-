@@ -333,7 +333,7 @@ void ClusterTopologyPanel::OnPaint(wxPaintEvent&) {
     const char* hn = std::getenv("HOSTNAME");
     if (!hn) hn = std::getenv("COMPUTERNAME");
     selfNode.hostname = hn ? hn : "This Node";
-    selfNode.ip_address = "localhost";
+    selfNode.ip_address = GetLocalIP();
     selfNode.status = "connected";
 #ifdef _WIN32
     selfNode.platform = "Windows";

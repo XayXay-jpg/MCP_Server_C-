@@ -133,7 +133,17 @@ bool ClusterManager::ApproveNode(const std::string& id) {
     mcp_log("[Info] ApproveNode: Connecting to child '" + id + "' at http://" + ip);
     
     std::thread([id, ip, mt, ek]() {
-        httplib::Client cli("http://" + ip);
+        std::string host = ip;
+        int port = 80;
+        size_t colon_pos = host.find_last_of(':');
+        if (colon_pos != std::string::npos) {
+            try {
+                port = std::stoi(host.substr(colon_pos + 1));
+                host = host.substr(0, colon_pos);
+            } catch (...) {}
+        }
+        
+        httplib::Client cli(host, port);
         cli.set_connection_timeout(5, 0);
         
         // Gather parent metadata to send to child
@@ -233,6 +243,21 @@ bool ClusterManager::UpdateNodeId(const std::string& oldId, const std::string& n
     for (auto& n : nodes) {
         if (n.id == oldId) {
             n.id = newId;
+            SaveNodes();
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ClusterManager::UpdateNodeMetadata(const std::string& id, const std::string& os_version, const std::string& local_ip, const std::string& app_version, bool is_parent) {
+    std::lock_guard<std::mutex> lock(mtx);
+    for (auto& n : nodes) {
+        if (n.id == id) {
+            n.os_version = os_version;
+            n.local_ip = local_ip;
+            n.app_version = app_version;
+            n.is_parent = is_parent;
             SaveNodes();
             return true;
         }

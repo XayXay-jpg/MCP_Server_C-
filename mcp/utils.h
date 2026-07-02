@@ -12,6 +12,7 @@ extern std::function<void(const std::string&, const std::string&)> g_notify_call
 extern std::function<bool(const std::string&, const std::string&)> g_confirm_callback;
 extern std::function<void()> g_refresh_cluster_callback;
 void mcp_log(const std::string& message);
+std::string GetLocalIP();
 
 // Глобальное состояние
 extern std::filesystem::path BASE_DIR;

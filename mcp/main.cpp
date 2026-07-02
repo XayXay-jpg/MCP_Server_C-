@@ -512,17 +512,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                 // Store parent node with all metadata
                 ClusterManager::GetInstance().RegisterNodeRequest("parent", parent_ip, parent_hostname, data.value("parent_platform", "Unknown"));
                 {
-                    // Update extended metadata for parent node
-                    auto nodes = ClusterManager::GetInstance().GetNodes();
-                    for (auto& n : nodes) {
-                        if (n.id == "parent") {
-                            n.os_version = data.value("parent_platform", "");
-                            n.local_ip = data.value("parent_ip", parent_ip);
-                            n.app_version = data.value("parent_version", "");
-                            n.is_parent = true;
-                            break;
-                        }
-                    }
+                    ClusterManager::GetInstance().UpdateNodeMetadata("parent", data.value("parent_platform", ""), data.value("parent_ip", parent_ip), data.value("parent_version", ""), true);
                 }
                 ClusterManager::GetInstance().SetNodeStatus("parent", "connected");
                 if (g_refresh_cluster_callback) g_refresh_cluster_callback();
@@ -539,7 +529,10 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                 "Linux";
 #endif
                 // Collect local IP
-                std::string localIp = req.local_addr.empty() ? "Unknown" : req.local_addr;
+                std::string localIp = req.local_addr;
+                if (localIp.empty() || localIp == "127.0.0.1" || localIp == "localhost" || localIp == "0.0.0.0") {
+                    localIp = GetLocalIP();
+                }
 
                 json resp;
                 resp["status"] = "ok";

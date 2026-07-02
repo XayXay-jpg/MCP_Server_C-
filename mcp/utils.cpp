@@ -1,8 +1,57 @@
 #include "utils.h"
 #include <iostream>
+#include <nlohmann/json.hpp>
+#include <filesystem>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+#else
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <cstring>
+#endif
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
+
+std::string GetLocalIP() {
+    std::string localIp = "127.0.0.1";
+#ifdef _WIN32
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) return localIp;
+#endif
+
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock != -1) {
+        struct sockaddr_in serv;
+        memset(&serv, 0, sizeof(serv));
+        serv.sin_family = AF_INET;
+        serv.sin_addr.s_addr = inet_addr("8.8.8.8");
+        serv.sin_port = htons(53);
+
+        if (connect(sock, (const struct sockaddr*)&serv, sizeof(serv)) == 0) {
+            struct sockaddr_in name;
+            socklen_t namelen = sizeof(name);
+            if (getsockname(sock, (struct sockaddr*)&name, &namelen) == 0) {
+                localIp = inet_ntoa(name.sin_addr);
+            }
+        }
+#ifdef _WIN32
+        closesocket(sock);
+#else
+        close(sock);
+#endif
+    }
+    
+#ifdef _WIN32
+    WSACleanup();
+#endif
+    return localIp;
+}
 
 fs::path BASE_DIR;
 std::atomic<int> g_active_sessions{0};

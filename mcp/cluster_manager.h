@@ -46,6 +46,9 @@ public:
     // Get a specific node
     bool GetNode(const std::string& id, ClusterNode& out_node);
 
+    // Update node metadata
+    bool UpdateNodeMetadata(const std::string& id, const std::string& os_version, const std::string& local_ip, const std::string& app_version, bool is_parent);
+
     // Update last seen timestamp
     void PingNode(const std::string& id);
 
