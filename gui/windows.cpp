@@ -1404,8 +1404,9 @@ void Windows::OnAddNode(wxCommandEvent& event) {
         
         std::string nodeId = name.empty() ? ("child_" + std::to_string(rand() % 10000)) : name;
         
-        ClusterManager::GetInstance().RegisterNodeRequest(nodeId, url, name, "Unknown");
-        ClusterManager::GetInstance().ApproveNode(nodeId);
+        std::string actualId;
+        ClusterManager::GetInstance().RegisterNodeRequest(nodeId, url, name, "Unknown", actualId);
+        ClusterManager::GetInstance().ApproveNode(actualId);
         RefreshNodesList();
     }
 }

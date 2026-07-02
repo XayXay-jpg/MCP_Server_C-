@@ -546,13 +546,30 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                 return;
             }
             
-            bool is_new = ClusterManager::GetInstance().RegisterNodeRequest(id, ip, hostname, platform);
-            if (is_new && g_notify_callback) {
-                g_notify_callback("Cluster Connection", "New node request from " + hostname + " (" + ip + ")");
-            }
+            std::string actualId;
+            bool is_new = ClusterManager::GetInstance().RegisterNodeRequest(id, ip, hostname, platform, actualId);
             
             res.status = 200;
             res.set_content("{\"status\":\"pending\"}", "application/json");
+            
+            std::thread([actualId, is_new, ip, hostname]() {
+                if (is_new) {
+                    if (g_confirm_callback) {
+                        bool approved = g_confirm_callback("Incoming Join Request", "Node '" + hostname + "' (" + ip + ") wants to join the cluster.\nApprove this connection?");
+                        if (approved) {
+                            ClusterManager::GetInstance().ApproveNode(actualId);
+                        } else {
+                            ClusterManager::GetInstance().RemoveNode(actualId);
+                            if (g_refresh_cluster_callback) g_refresh_cluster_callback();
+                        }
+                    } else if (g_notify_callback) {
+                        g_notify_callback("Cluster Connection", "New node request from " + hostname + " (" + ip + ")");
+                    }
+                } else {
+                    // Node already exists, auto-approve and re-configure it
+                    ClusterManager::GetInstance().ApproveNode(actualId);
+                }
+            }).detach();
             
         } catch (...) {
             res.status = 400;
@@ -621,7 +638,8 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                 if (g_notify_callback) g_notify_callback("Cluster Configuration", "Received configuration from Parent node '" + parent_hostname + "'.");
                 
                 // Store parent node with all metadata
-                ClusterManager::GetInstance().RegisterNodeRequest("parent", parent_ip, parent_hostname, data.value("parent_platform", "Unknown"));
+                std::string dummyId;
+                ClusterManager::GetInstance().RegisterNodeRequest("parent", parent_ip, parent_hostname, data.value("parent_platform", "Unknown"), dummyId);
                 {
                     ClusterManager::GetInstance().UpdateNodeMetadata("parent", data.value("parent_platform", ""), data.value("parent_ip", parent_ip), data.value("parent_version", ""), true);
                 }

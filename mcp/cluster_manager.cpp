@@ -84,16 +84,17 @@ std::string GenerateRandomString(size_t length) {
     return result;
 }
 
-bool ClusterManager::RegisterNodeRequest(const std::string& id, const std::string& ip_address, const std::string& hostname, const std::string& platform) {
+bool ClusterManager::RegisterNodeRequest(const std::string& id, const std::string& ip_address, const std::string& hostname, const std::string& platform, std::string& out_id) {
     std::lock_guard<std::mutex> lock(mtx);
     
-    // Check if exists
+    // Check if exists by id, ip_address, or hostname
     for (auto& n : nodes) {
-        if (n.id == id) {
+        if (n.id == id || n.ip_address == ip_address || (n.id != "parent" && n.hostname == hostname && !hostname.empty() && hostname != "UnknownNode")) {
             n.ip_address = ip_address;
             n.hostname = hostname;
             n.platform = platform;
             n.last_seen = GetCurrentTimestamp();
+            out_id = n.id;
             return false; // Already exists, just updated
         }
     }
@@ -110,6 +111,7 @@ bool ClusterManager::RegisterNodeRequest(const std::string& id, const std::strin
     
     nodes.push_back(node);
     SaveNodes();
+    out_id = id;
     return true; // New node registered
 }
 

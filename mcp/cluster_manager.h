@@ -32,7 +32,7 @@ public:
     void SaveNodes();
 
     // Register a new incoming connection request
-    bool RegisterNodeRequest(const std::string& id, const std::string& ip_address, const std::string& hostname, const std::string& platform);
+    bool RegisterNodeRequest(const std::string& id, const std::string& ip_address, const std::string& hostname, const std::string& platform, std::string& out_id);
     
     // Admin action: approve a node
     bool ApproveNode(const std::string& id);
