@@ -47,6 +47,9 @@ public:
 
     bool UpdateNodeId(const std::string& oldId, const std::string& newId);
     bool SetNodeStatus(const std::string& id, const std::string& status);
+    
+    // Attempt to reconnect to all saved nodes
+    void ReconnectAllNodes();
 
 private:
     ClusterManager() {}

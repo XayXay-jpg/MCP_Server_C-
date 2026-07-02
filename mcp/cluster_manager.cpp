@@ -210,6 +210,28 @@ bool ClusterManager::SetNodeStatus(const std::string& id, const std::string& sta
     return false;
 }
 
+void ClusterManager::ReconnectAllNodes() {
+    std::vector<std::string> ids_to_reconnect;
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        for (auto& n : nodes) {
+            if (n.id != "parent") {
+                n.status = "connecting...";
+                ids_to_reconnect.push_back(n.id);
+            }
+        }
+        if (!ids_to_reconnect.empty()) {
+            SaveNodes();
+        }
+    }
+    
+    if (g_refresh_cluster_callback) g_refresh_cluster_callback();
+    
+    for (const auto& id : ids_to_reconnect) {
+        ApproveNode(id);
+    }
+}
+
 std::vector<ClusterNode> ClusterManager::GetNodes() {
     std::lock_guard<std::mutex> lock(mtx);
     return nodes;

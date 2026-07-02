@@ -137,6 +137,7 @@ private:
         dictionary["EN"]["BTN_COPY_TOKEN_URL"] = wxString::FromUTF8("Copy URL for Token");
         dictionary["EN"]["LBL_NET_CHECK"] = wxString::FromUTF8("NETWORK CHECKER");
         dictionary["EN"]["BTN_CHECK"] = wxString::FromUTF8("Check");
+        dictionary["EN"]["BTN_RECONNECT"] = wxString::FromUTF8("Reconnect");
         dictionary["EN"]["LBL_READY"] = wxString::FromUTF8("Ready");
         dictionary["EN"]["LBL_CHECKING"] = wxString::FromUTF8("Checking...");
         dictionary["EN"]["LBL_REACH_EXT"] = wxString::FromUTF8("Reachable externally");
@@ -271,6 +272,7 @@ private:
         dictionary["RU"]["BTN_COPY_TOKEN_URL"] = wxString::FromUTF8("Копировать URL Токена");
         dictionary["RU"]["LBL_NET_CHECK"] = wxString::FromUTF8("ПРОВЕРКА СЕТИ");
         dictionary["RU"]["BTN_CHECK"] = wxString::FromUTF8("Проверить");
+        dictionary["RU"]["BTN_RECONNECT"] = wxString::FromUTF8("Переподключить");
         dictionary["RU"]["LBL_READY"] = wxString::FromUTF8("Готово");
         dictionary["RU"]["LBL_CHECKING"] = wxString::FromUTF8("Проверка...");
         dictionary["RU"]["LBL_REACH_EXT"] = wxString::FromUTF8("Доступен извне");

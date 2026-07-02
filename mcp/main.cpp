@@ -463,55 +463,54 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
             json data = json::parse(req.body);
             auto& sm = SettingsManager::Get();
             if (sm.appMode.find("Child") != std::string::npos) {
-                if (sm.parentMasterToken.empty() || sm.parentMasterToken == data.value("master_token", "")) {
-                    std::string parent_hostname = data.value("parent_hostname", "Parent Node");
-                    std::string parent_ip = req.remote_addr;
+                std::string parent_hostname = data.value("parent_hostname", "Parent Node");
+                std::string parent_ip = req.remote_addr;
+                
+                bool is_new_parent = sm.parentMasterToken.empty() || sm.parentMasterToken != data.value("master_token", "");
+                
+                if (is_new_parent && g_confirm_callback) {
+                    std::string prompt = sm.parentMasterToken.empty() ? 
+                        "Allow Parent Node '" + parent_hostname + "' (" + parent_ip + ") to control this device?" :
+                        "A different Parent Node '" + parent_hostname + "' (" + parent_ip + ") is trying to connect.\nOverride existing connection?";
                     
-                    if (sm.parentMasterToken.empty() && g_confirm_callback) {
-                        bool approved = g_confirm_callback("Incoming Connection", 
-                            "Allow Parent Node '" + parent_hostname + "' (" + parent_ip + ") to control this device?");
-                        if (!approved) {
-                            res.status = 403;
-                            res.set_content("{\"error\":\"Rejected by user\"}", "application/json");
-                            return;
-                        }
+                    bool approved = g_confirm_callback("Incoming Connection", prompt);
+                    if (!approved) {
+                        res.status = 403;
+                        res.set_content("{\"error\":\"Rejected by user\"}", "application/json");
+                        return;
                     }
+                }
 
-                    sm.parentMasterToken = data.value("master_token", "");
-                    sm.parentEncryptionKey = data.value("encryption_key", "");
-                    sm.Save();
-                    mcp_log("[Info] Node successfully configured by Parent.");
-                    if (g_notify_callback) g_notify_callback("Cluster Configuration", "Received configuration from Parent node.");
-                    
-                    ClusterManager::GetInstance().RegisterNodeRequest("parent", parent_ip, parent_hostname, "Parent Server");
-                    ClusterManager::GetInstance().SetNodeStatus("parent", "connected");
-                    if (g_refresh_cluster_callback) g_refresh_cluster_callback();
-                    
-                    const char* hn = std::getenv("HOSTNAME");
-                    if (!hn) hn = std::getenv("COMPUTERNAME");
-                    std::string hostnameStr = hn ? hn : "UnknownNode";
-                    std::string platformStr =
+                sm.parentMasterToken = data.value("master_token", "");
+                sm.parentEncryptionKey = data.value("encryption_key", "");
+                sm.Save();
+                mcp_log("[Info] Node successfully configured by Parent.");
+                if (g_notify_callback) g_notify_callback("Cluster Configuration", "Received configuration from Parent node.");
+                
+                ClusterManager::GetInstance().RegisterNodeRequest("parent", parent_ip, parent_hostname, "Parent Server");
+                ClusterManager::GetInstance().SetNodeStatus("parent", "connected");
+                if (g_refresh_cluster_callback) g_refresh_cluster_callback();
+                
+                const char* hn = std::getenv("HOSTNAME");
+                if (!hn) hn = std::getenv("COMPUTERNAME");
+                std::string hostnameStr = hn ? hn : "UnknownNode";
+                std::string platformStr =
 #ifdef _WIN32
-                    "Windows";
+                "Windows";
 #elif defined(__APPLE__)
-                    "macOS";
+                "macOS";
 #else
-                    "Linux";
+                "Linux";
 #endif
 
-                    json resp;
-                    resp["status"] = "ok";
-                    resp["hostname"] = hostnameStr;
-                    resp["platform"] = platformStr;
+                json resp;
+                resp["status"] = "ok";
+                resp["hostname"] = hostnameStr;
+                resp["platform"] = platformStr;
 
-                    res.status = 200;
-                    res.set_content(resp.dump(), "application/json");
-                    return;
-                } else {
-                    res.status = 403;
-                    res.set_content("{\"error\":\"Already configured with a different parent\"}", "application/json");
-                    return;
-                }
+                res.status = 200;
+                res.set_content(resp.dump(), "application/json");
+                return;
             }
             res.status = 400;
         } catch (...) {
@@ -526,6 +525,13 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
     mcp_log("[Info] Server started.\n");
     mcp_log("[Info] Sandbox Directory: " + BASE_DIR.string());
     mcp_log("[Info] SSE Endpoint: http://" + host + ":" + std::to_string(port) + "/sse\n");
+
+    std::thread([]() {
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        if (SettingsManager::Get().appMode.find("Parent") != std::string::npos) {
+            ClusterManager::GetInstance().ReconnectAllNodes();
+        }
+    }).detach();
 
     svr.listen(host.c_str(), port);
 

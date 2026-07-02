@@ -170,6 +170,7 @@ enum {
     ID_BTN_APPROVE_NODE,
     ID_BTN_REJECT_NODE,
     ID_BTN_ADD_NODE,
+    ID_BTN_RECONNECT_NODE,
     ID_BTN_TOGGLE_COMPACT,
     ID_BTN_TOGGLE_THEME,
     ID_ANIM_TIMER
@@ -783,6 +784,12 @@ void Windows::SetupUI() {
     
     clusterBtnSizer->Add(btnAddNode, 0, wxRIGHT, 10);
     clusterBtnSizer->Add(btnApproveNode, 0, wxRIGHT, 10);
+    
+    btnReconnectNode = new CustomButton(clusterCard, ID_BTN_RECONNECT_NODE, lang.GetString("BTN_RECONNECT"), wxDefaultPosition, wxSize(170, 36));
+    btnReconnectNode->SetBackgroundColour(wxColour("#F59E0B")); // Amber 500
+    btnReconnectNode->SetForegroundColour(wxColour("#FFFFFF"));
+    
+    clusterBtnSizer->Add(btnReconnectNode, 0, wxRIGHT, 10);
     clusterBtnSizer->Add(btnRejectNode, 0, 0, 0);
     
     clusterCardSizer->Add(clusterBtnSizer, 0, wxALL, 15);
@@ -1399,6 +1406,24 @@ void Windows::OnAddNode(wxCommandEvent& event) {
         ClusterManager::GetInstance().RegisterNodeRequest(nodeId, url, url, "manual");
         ClusterManager::GetInstance().ApproveNode(nodeId); // Auto approve manual
         RefreshNodesList();
+    }
+}
+
+void Windows::OnReconnectNode(wxCommandEvent& event) {
+    long item = -1;
+    item = listNodes->GetNextItem(item, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+    if (item != -1) {
+        std::string id = listNodes->GetItemText(item).ToStdString();
+        ClusterManager::GetInstance().SetNodeStatus(id, "connecting...");
+        RefreshNodesList();
+        
+        std::thread([id]() {
+            ClusterManager::GetInstance().ApproveNode(id);
+        }).detach();
+    } else {
+        std::thread([]() {
+            ClusterManager::GetInstance().ReconnectAllNodes();
+        }).detach();
     }
 }
 
@@ -2173,6 +2198,7 @@ wxBEGIN_EVENT_TABLE(Windows, wxFrame)
     EVT_BUTTON(ID_BTN_APPROVE_NODE, Windows::OnApproveNode)
     EVT_BUTTON(ID_BTN_REJECT_NODE,  Windows::OnRejectNode)
     EVT_BUTTON(ID_BTN_ADD_NODE,     Windows::OnAddNode)
+    EVT_BUTTON(ID_BTN_RECONNECT_NODE, Windows::OnReconnectNode)
     EVT_BUTTON(ID_BTN_TOGGLE_COMPACT, Windows::OnToggleCompact)
     EVT_BUTTON(ID_BTN_TOGGLE_THEME, Windows::OnToggleTheme)
     EVT_TIMER(ID_ANIM_TIMER, Windows::OnAnimTimer)

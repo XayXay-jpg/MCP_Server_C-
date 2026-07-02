@@ -90,6 +90,7 @@ private:
     CustomButton* btnApproveNode = nullptr;
     CustomButton* btnRejectNode = nullptr;
     CustomButton* btnAddNode = nullptr;
+    CustomButton* btnReconnectNode = nullptr;
     
     wxPanel* toolsContainer; // Holds Tools page
     wxStaticText* lblToolsHeader = nullptr;
@@ -250,6 +251,7 @@ private:
     void OnApproveNode(wxCommandEvent& event);
     void OnRejectNode(wxCommandEvent& event);
     void OnAddNode(wxCommandEvent& event);
+    void OnReconnectNode(wxCommandEvent& event);
     void OnNodeIdEdited(wxListEvent& event);
     
     void OnGridSize(wxSizeEvent& event);
