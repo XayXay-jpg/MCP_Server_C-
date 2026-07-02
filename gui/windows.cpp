@@ -1836,12 +1836,26 @@ void Windows::OnCreateToken(wxCommandEvent& event) {
 }
 
 void Windows::SaveTokensFromGrid() {
+    std::vector<TokenInfo> originalTokens = NetworkUtils::LoadTokens();
     std::vector<TokenInfo> tokens;
     for (int i = 0; i < gridTokens->GetNumberRows(); ++i) {
         TokenInfo t;
         t.name = gridTokens->GetCellValue(i, 0).ToStdString();
         t.id = gridTokens->GetCellValue(i, 1).ToStdString();
-        t.raw_token = gridTokens->GetCellValue(i, 2).ToStdString();
+        std::string rawFromGrid = gridTokens->GetCellValue(i, 2).ToStdString();
+        
+        auto it = std::find_if(originalTokens.begin(), originalTokens.end(), [&](const TokenInfo& o) { return o.id == t.id; });
+        if (it != originalTokens.end()) {
+            if (rawFromGrid.find("***") != std::string::npos) {
+                t.raw_token = it->raw_token; // keep original unmasked
+            } else {
+                t.raw_token = rawFromGrid;
+            }
+            t.permissions = it->permissions;
+        } else {
+            t.raw_token = rawFromGrid;
+        }
+        
         t.creation_date = gridTokens->GetCellValue(i, 3).ToStdString();
         t.active = (gridTokens->GetCellValue(i, 4) == "Active");
         tokens.push_back(t);
