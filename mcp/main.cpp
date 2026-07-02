@@ -168,18 +168,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                 auto& sm = SettingsManager::Get();
                 if (!sm.parentMasterToken.empty() && token_provided == sm.parentMasterToken) {
                     if (req.has_header("X-MCP-Signature")) {
-                        std::string sig = req.get_header_value("X-MCP-Signature");
-                        std::string expected_sig = generate_hmac_sha256(sm.parentEncryptionKey, req.body);
-                        mcp_log("[Auth] Child parentEncryptionKey: " + sm.parentEncryptionKey);
-                        mcp_log("[Auth] Child req.body length: " + std::to_string(req.body.length()));
-                        mcp_log("[Auth] Child expected_sig: " + expected_sig);
-                        mcp_log("[Auth] Child received_sig: " + sig);
-                        
-                        if (sig == expected_sig) {
-                            token_valid = true;
-                        } else {
-                            mcp_log("[Auth] HMAC signature mismatch from " + req.remote_addr + " — possible tampering or key mismatch.");
-                        }
+                        token_valid = true; // Signature will be verified in post_handler
                     } else {
                         mcp_log("[Auth] Parent token matched but no X-MCP-Signature header from " + req.remote_addr);
                     }
@@ -325,6 +314,33 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
     // 2. HTTP POST Messages Endpoint (and fallback for Open WebUI direct POST)
     auto post_handler = [set_cors](const httplib::Request& req, httplib::Response& res) {
         set_cors(res);
+
+        auto& sm_check = SettingsManager::Get();
+        if (!sm_check.parentMasterToken.empty()) {
+            std::string tp = "";
+            if (req.has_header("Authorization")) {
+                std::string auth_header = req.get_header_value("Authorization");
+                if (auth_header.rfind("Bearer ", 0) == 0) tp = auth_header.substr(7);
+            }
+            if (tp.empty() && req.has_param("token")) tp = req.get_param_value("token");
+            
+            if (tp == sm_check.parentMasterToken) {
+                if (req.has_header("X-MCP-Signature")) {
+                    std::string sig = req.get_header_value("X-MCP-Signature");
+                    std::string expected_sig = generate_hmac_sha256(sm_check.parentEncryptionKey, req.body);
+                    if (sig != expected_sig) {
+                        mcp_log("[Auth] HMAC signature mismatch in post_handler!");
+                        res.status = 401;
+                        res.set_content("Invalid Signature", "text/plain");
+                        return;
+                    }
+                } else {
+                    res.status = 401;
+                    res.set_content("Missing Signature", "text/plain");
+                    return;
+                }
+            }
+        }
 
         bool is_direct_post = false;
         std::string session_id;
