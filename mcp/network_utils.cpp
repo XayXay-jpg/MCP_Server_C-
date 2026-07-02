@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <sstream>
 #include <httplib.h>
+#include "server.h"
 
 using json = nlohmann::json;
 
@@ -107,6 +108,9 @@ void NetworkUtils::SaveTokens(const std::vector<TokenInfo>& tokens) {
     }
     std::ofstream f("tokens.json");
     f << j.dump(4);
+    
+    // Notify AI clients about potential permission changes
+    notify_tools_changed();
 }
 
 void NetworkUtils::AddToken(const TokenInfo& token) {

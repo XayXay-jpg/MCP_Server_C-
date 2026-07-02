@@ -53,6 +53,20 @@ void send_to_session(const std::string& session_id, const json& response) {
     }
 }
 
+void notify_tools_changed() {
+    json notification = {
+        {"jsonrpc", "2.0"},
+        {"method", "notifications/tools/list_changed"}
+    };
+    std::lock_guard<std::mutex> lock(sessions_mutex);
+    for (const auto& [id, session] : active_sessions) {
+        if (session->active) {
+            std::lock_guard<std::mutex> slock(session->mtx);
+            session->messages.push(notification.dump());
+            session->cv.notify_one();
+        }
+    }
+}
 
 // Обработчики методов
 json handle_initialize(const json& request) {
@@ -63,7 +77,9 @@ json handle_initialize(const json& request) {
         {"result", {
             {"protocolVersion", "2024-11-05"},
             {"capabilities", {
-                {"tools", json::object()}
+                {"tools", {
+                    {"listChanged", true}
+                }}
             }},
             {"serverInfo", {
                 {"name", "secure-cpp-mcp-http"},
@@ -414,6 +430,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                 request.erase("_forwarded_token_enc");
             }
             if (request.contains("_forwarded_token")) {
+                request["_is_forwarded"] = true;
                 request.erase("_forwarded_token");
             }
             json result;

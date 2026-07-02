@@ -478,8 +478,9 @@ json handle_tools_call(const json& request, const TokenInfo& token) {
         mcp_log("[Tool] Executing: " + name + " on server: " + target_server);
         g_tool_calls++;
         
+        bool is_forwarded = request.value("_is_forwarded", false);
         bool no_permissions_configured = token.permissions.allowed_servers.empty();
-        bool has_access = no_permissions_configured || token.permissions.has_tool_access(target_server, name);
+        bool has_access = is_forwarded || no_permissions_configured || token.permissions.has_tool_access(target_server, name);
         
         if (!has_access) {
             mcp_log("[Access Denied] Token '" + token.name + "' tried to use '" + name + "' on '" + target_server + "' — permission denied.");

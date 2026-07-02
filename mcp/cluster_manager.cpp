@@ -2,6 +2,7 @@
 #include "utils.h"
 #include "network_utils.h"
 #include "crypto_utils.h"
+#include "server.h"
 #include <fstream>
 #include <iostream>
 #include <chrono>
@@ -67,6 +68,9 @@ void ClusterManager::SaveNodes() {
     }
     std::ofstream f("cluster_nodes.json");
     f << j.dump(4);
+    
+    // Notify AI clients about topology change
+    notify_tools_changed();
 }
 
 std::string GenerateRandomString(size_t length) {
