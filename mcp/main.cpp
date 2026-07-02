@@ -536,9 +536,12 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
         try {
             json data = json::parse(req.body);
             std::string id = data.value("id", "");
-            std::string ip = req.remote_addr + ":" + data.value("port", "8080"); 
+            std::string port_str = data.value("port", "8080");
+            std::string ip = req.remote_addr + ":" + port_str; 
             std::string hostname = data.value("hostname", "Unknown");
             std::string platform = data.value("platform", "Unknown");
+            
+            mcp_log("[Cluster] /cluster/join from " + req.remote_addr + " hostname='" + hostname + "' port=" + port_str + " id=" + id);
             
             if (id.empty()) {
                 res.status = 400;
@@ -548,6 +551,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
             
             std::string actualId;
             bool is_new = ClusterManager::GetInstance().RegisterNodeRequest(id, ip, hostname, platform, actualId);
+            mcp_log("[Cluster] RegisterNodeRequest: is_new=" + std::string(is_new ? "true" : "false") + " actualId='" + actualId + "' stored_ip=" + ip);
             
             res.status = 200;
             res.set_content("{\"status\":\"pending\"}", "application/json");
@@ -557,6 +561,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                     if (g_confirm_callback) {
                         bool approved = g_confirm_callback("Incoming Join Request", "Node '" + hostname + "' (" + ip + ") wants to join the cluster.\nApprove this connection?");
                         if (approved) {
+                            mcp_log("[Cluster] User approved new node '" + actualId + "'");
                             ClusterManager::GetInstance().ApproveNode(actualId);
                         } else {
                             ClusterManager::GetInstance().RemoveNode(actualId);
@@ -567,6 +572,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                     }
                 } else {
                     // Node already exists, auto-approve and re-configure it
+                    mcp_log("[Cluster] Known node '" + actualId + "' reconnected, calling ApproveNode...");
                     ClusterManager::GetInstance().ApproveNode(actualId);
                 }
             }).detach();

@@ -2282,8 +2282,7 @@ void Windows::OnAnimTimer(wxTimerEvent& event) {
     
     sidebarPanel->SetMinSize(wxSize(currentSidebarWidth, -1));
     this->Layout();
-    this->Refresh(true);
-    this->Update();
+    this->Refresh();
     
     if (currentSidebarWidth == targetSidebarWidth) {
         double finalProgress = SettingsManager::Get().compactMode ? 0.0 : 1.0;
@@ -2294,8 +2293,7 @@ void Windows::OnAnimTimer(wxTimerEvent& event) {
             btnToggleTheme->Show();
         }
         this->Layout();
-        this->Refresh(true);
-        this->Update();
+        this->Refresh();
     }
 }
 
