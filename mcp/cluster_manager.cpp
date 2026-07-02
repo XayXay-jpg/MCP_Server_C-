@@ -25,7 +25,13 @@ void ClusterManager::LoadNodes() {
             ClusterNode node;
             node.id = item.value("id", "");
             node.ip_address = item.value("ip_address", "");
-            node.status = item.value("status", "pending");
+            // Reset transient statuses so they don't stick across restarts
+            std::string saved_status = item.value("status", "pending");
+            if (saved_status == "connected" || saved_status == "offline" || saved_status == "error_403" || saved_status == "connecting...") {
+                node.status = (node.id == "parent") ? saved_status : "pending";
+            } else {
+                node.status = saved_status;
+            }
             node.hostname = item.value("hostname", "");
             node.platform = item.value("platform", "");
             node.last_seen = item.value("last_seen", 0LL);
@@ -92,82 +98,86 @@ bool ClusterManager::RegisterNodeRequest(const std::string& id, const std::strin
 }
 
 bool ClusterManager::ApproveNode(const std::string& id) {
-    std::lock_guard<std::mutex> lock(mtx);
-    for (auto& n : nodes) {
-        if (n.id == id) {
-            n.status = "connecting...";
-            SaveNodes();
-            
-            // Send configure packet to child
-            std::string ip = n.ip_address;
-            if (ip.find("http://") == 0) ip = ip.substr(7);
-            if (ip.find("https://") == 0) ip = ip.substr(8);
-            
-            std::thread([id, ip, mt = n.master_token, ek = n.encryption_key]() {
-                httplib::Client cli("http://" + ip);
-                cli.set_connection_timeout(5, 0);
-                const char* hn_env = std::getenv("HOSTNAME");
-                if (!hn_env) hn_env = std::getenv("COMPUTERNAME");
-                std::string my_hostname = hn_env ? hn_env : "ParentNode";
-                
-                json req = {
-                    {"master_token", mt},
-                    {"encryption_key", ek},
-                    {"parent_hostname", my_hostname}
-                };
-                if (auto res = cli.Post("/cluster/configure", req.dump(), "application/json")) {
-                    if (res->status == 200) {
-                        try {
-                            json resp = json::parse(res->body);
-                            std::string hn = resp.value("hostname", "Old-Binary");
-                            std::string pt = resp.value("platform", "Unknown");
-                            
-                            std::lock_guard<std::mutex> lk(ClusterManager::GetInstance().mtx);
-                            for (auto& node : ClusterManager::GetInstance().nodes) {
-                                if (node.id == id) {
-                                    node.hostname = hn;
-                                    node.platform = pt;
-                                    node.status = "connected";
-                                    ClusterManager::GetInstance().SaveNodes();
-                                    mcp_log("[Info] Successfully connected to child node: " + hn + " (" + pt + ")");
-                                    break;
-                                }
-                            }
-                        } catch (...) {}
-                    } else {
-                        mcp_log("[Error] Child node rejected configuration: HTTP " + std::to_string(res->status));
-                        // Request reached child but got an error (e.g. 403 already configured)
-                        std::lock_guard<std::mutex> lk(ClusterManager::GetInstance().mtx);
-                        for (auto& node : ClusterManager::GetInstance().nodes) {
-                            if (node.id == id) {
-                                node.status = "error_403";
-                                ClusterManager::GetInstance().SaveNodes();
-                                break;
-                            }
-                        }
-                    }
-                } else {
-                    mcp_log("[Error] Could not connect to child node at " + ip);
-                    // Connection failed completely
+    std::string ip, mt, ek;
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        for (auto& n : nodes) {
+            if (n.id == id) {
+                n.status = "connecting...";
+                SaveNodes();
+                ip = n.ip_address;
+                mt = n.master_token;
+                ek = n.encryption_key;
+                break;
+            }
+        }
+    } // <-- lock released BEFORE spawning thread to avoid deadlock
+    
+    if (ip.empty()) return false;
+    
+    if (ip.find("http://") == 0) ip = ip.substr(7);
+    if (ip.find("https://") == 0) ip = ip.substr(8);
+    
+    std::thread([id, ip, mt, ek]() {
+        httplib::Client cli("http://" + ip);
+        cli.set_connection_timeout(5, 0);
+        const char* hn_env = std::getenv("HOSTNAME");
+        if (!hn_env) hn_env = std::getenv("COMPUTERNAME");
+        std::string my_hostname = hn_env ? hn_env : "ParentNode";
+        
+        json req = {
+            {"master_token", mt},
+            {"encryption_key", ek},
+            {"parent_hostname", my_hostname}
+        };
+        if (auto res = cli.Post("/cluster/configure", req.dump(), "application/json")) {
+            if (res->status == 200) {
+                try {
+                    json resp = json::parse(res->body);
+                    std::string hn = resp.value("hostname", "");
+                    std::string pt = resp.value("platform", "Unknown");
+                    
                     std::lock_guard<std::mutex> lk(ClusterManager::GetInstance().mtx);
                     for (auto& node : ClusterManager::GetInstance().nodes) {
                         if (node.id == id) {
-                            node.status = "offline";
+                            if (!hn.empty()) node.hostname = hn;
+                            node.platform = pt;
+                            node.status = "connected";
                             ClusterManager::GetInstance().SaveNodes();
+                            mcp_log("[Info] Successfully connected to child node: " + hn + " (" + pt + ")");
                             break;
                         }
                     }
+                } catch (...) {}
+            } else {
+                mcp_log("[Error] Child node rejected configuration: HTTP " + std::to_string(res->status));
+                std::lock_guard<std::mutex> lk(ClusterManager::GetInstance().mtx);
+                for (auto& node : ClusterManager::GetInstance().nodes) {
+                    if (node.id == id) {
+                        node.status = "error_403";
+                        ClusterManager::GetInstance().SaveNodes();
+                        break;
+                    }
                 }
-                
-                if (g_refresh_cluster_callback) {
-                    g_refresh_cluster_callback();
+            }
+        } else {
+            mcp_log("[Error] Could not connect to child node at " + ip);
+            std::lock_guard<std::mutex> lk(ClusterManager::GetInstance().mtx);
+            for (auto& node : ClusterManager::GetInstance().nodes) {
+                if (node.id == id) {
+                    node.status = "offline";
+                    ClusterManager::GetInstance().SaveNodes();
+                    break;
                 }
-            }).detach();
-            
-            return true;
+            }
         }
-    }
-    return false;
+        
+        if (g_refresh_cluster_callback) {
+            g_refresh_cluster_callback();
+        }
+    }).detach();
+    
+    return true;
 }
 
 void ClusterManager::RemoveNode(const std::string& id) {
