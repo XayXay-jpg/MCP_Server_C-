@@ -477,8 +477,12 @@ json handle_tools_call(const json& request, const TokenInfo& token) {
         mcp_log("[Tool] Executing: " + name + " on server: " + target_server);
         g_tool_calls++;
         
-        if (!token.permissions.has_tool_access(target_server, name)) {
-            combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "] Error: Access Denied to tool '" + name + "'"}});
+        bool no_permissions_configured = token.permissions.allowed_servers.empty();
+        bool has_access = no_permissions_configured || token.permissions.has_tool_access(target_server, name);
+        
+        if (!has_access) {
+            mcp_log("[Access Denied] Token '" + token.name + "' tried to use '" + name + "' on '" + target_server + "' — permission denied.");
+            combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "] Error: Access Denied to tool '" + name + "' for this token."}});
             continue;
         }
         

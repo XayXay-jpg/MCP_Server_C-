@@ -170,7 +170,11 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                         std::string expected_sig = generate_hmac_sha256(sm.parentEncryptionKey, req.body);
                         if (sig == expected_sig) {
                             token_valid = true;
+                        } else {
+                            mcp_log("[Auth] HMAC signature mismatch from " + req.remote_addr + " — possible tampering or key mismatch.");
                         }
+                    } else {
+                        mcp_log("[Auth] Parent token matched but no X-MCP-Signature header from " + req.remote_addr);
                     }
                 }
                 
@@ -186,6 +190,8 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
             }
 
             if (!token_valid) {
+                std::string log_reason = token_provided.empty() ? "no token provided" : "invalid/revoked token";
+                mcp_log("[Auth] 401 Unauthorized: " + req.method + " " + req.path + " from " + req.remote_addr + " — " + log_reason);
                 res.status = 401;
                 res.set_header("WWW-Authenticate", "Bearer realm=\"MCP Server\"");
                 res.set_header("Access-Control-Allow-Origin", "*");
@@ -353,8 +359,25 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
             }
         }
 
+        auto& sm_mode = SettingsManager::Get();
+        bool is_child_mode = sm_mode.appMode.find("Child") != std::string::npos;
+        
         mcp_log("[Info] POST Request from Token: " + token_display);
         mcp_log("[Info] Raw Payload: " + req.body);
+        
+        // Child server: log incoming tool requests from parent
+        if (is_child_mode && has_token == false && req.has_header("X-MCP-Signature")) {
+            try {
+                json peek = json::parse(req.body);
+                std::string method = peek.value("method", "");
+                if (method == "tools/call" && peek.contains("params")) {
+                    std::string tool_name = peek["params"].value("name", "unknown");
+                    mcp_log("[Child] Incoming tool request from Parent (" + req.remote_addr + "): " + tool_name);
+                    if (g_notify_callback) g_notify_callback("Tool Called by Parent", "Tool: " + tool_name + " from " + req.remote_addr);
+                }
+            } catch (...) {}
+        }
+        
         if (is_direct_post && g_notify_callback) {
             g_notify_callback("New Connection (POST)", "Token: " + token_display);
         }
