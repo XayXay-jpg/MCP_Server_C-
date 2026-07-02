@@ -26,8 +26,8 @@ void ClusterManager::LoadNodes() {
             node.id = item.value("id", "");
             node.ip_address = item.value("ip_address", "");
             std::string saved_status = item.value("status", "pending");
-            if (saved_status == "connected" || saved_status == "offline" || saved_status == "error_403" || saved_status == "connecting...") {
-                node.status = (node.id == "parent") ? saved_status : "pending";
+            if (saved_status == "connected" || saved_status == "connecting...") {
+                node.status = "offline";
             } else {
                 node.status = saved_status;
             }
@@ -282,7 +282,7 @@ void ClusterManager::ReconnectAllNodes() {
     {
         std::lock_guard<std::mutex> lock(mtx);
         for (auto& n : nodes) {
-            if (n.id != "parent") {
+            if (n.id != "parent" && (n.status == "offline" || n.status == "error_403")) {
                 n.status = "connecting...";
                 ids_to_reconnect.push_back(n.id);
             }
