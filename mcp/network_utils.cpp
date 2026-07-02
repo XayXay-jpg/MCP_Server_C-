@@ -51,9 +51,12 @@ std::string NetworkUtils::HashTokenSHA256(const std::string& token) {
     return exec(cmd.c_str());
 }
 
+#include "settings_manager.h"
+
 std::vector<TokenInfo> NetworkUtils::LoadTokens() {
     std::vector<TokenInfo> tokens;
-    std::ifstream f("tokens.json");
+    std::filesystem::path configPath = SettingsManager::Get().GetConfigDir() / "tokens.json";
+    std::ifstream f(configPath);
     if (!f.is_open()) return tokens;
 
     try {
@@ -106,7 +109,8 @@ void NetworkUtils::SaveTokens(const std::vector<TokenInfo>& tokens) {
             }}
         });
     }
-    std::ofstream f("tokens.json");
+    std::filesystem::path configPath = SettingsManager::Get().GetConfigDir() / "tokens.json";
+    std::ofstream f(configPath);
     f << j.dump(4);
     
     // Notify AI clients about potential permission changes

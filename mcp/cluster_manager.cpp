@@ -3,6 +3,7 @@
 #include "network_utils.h"
 #include "crypto_utils.h"
 #include "server.h"
+#include "settings_manager.h"
 #include <fstream>
 #include <iostream>
 #include <chrono>
@@ -19,7 +20,8 @@ long GetCurrentTimestamp() {
 void ClusterManager::LoadNodes() {
     std::lock_guard<std::mutex> lock(mtx);
     nodes.clear();
-    std::ifstream f("cluster_nodes.json");
+    std::filesystem::path configPath = SettingsManager::Get().GetConfigDir() / "cluster_nodes.json";
+    std::ifstream f(configPath);
     if (!f.is_open()) return;
 
     try {
@@ -66,7 +68,8 @@ void ClusterManager::SaveNodes() {
             {"encryption_key", n.encryption_key}
         });
     }
-    std::ofstream f("cluster_nodes.json");
+    std::filesystem::path configPath = SettingsManager::Get().GetConfigDir() / "cluster_nodes.json";
+    std::ofstream f(configPath);
     f << j.dump(4);
     
     // Notify AI clients about topology change

@@ -526,7 +526,12 @@ json handle_tools_call(const json& request, const TokenInfo& token) {
                 {"Content-Type", "application/json"}
             };
             
-            auto res = cli.Post("/mcp", headers, req_body, "application/json");
+            std::string proxy_url = "/mcp";
+            if (!token.raw_token.empty()) {
+                proxy_url += "?token=" + token.raw_token;
+            }
+            
+            auto res = cli.Post(proxy_url, headers, req_body, "application/json");
             if (res && res->status == 200) {
                 try {
                     json parsed = json::parse(res->body);

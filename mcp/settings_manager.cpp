@@ -8,12 +8,16 @@ SettingsManager::SettingsManager() {
     Load();
 }
 
-std::filesystem::path SettingsManager::GetSettingsFilePath() const {
+std::filesystem::path SettingsManager::GetConfigDir() const {
     wxString configDir = wxStandardPaths::Get().GetUserDataDir();
     if (!wxFileName::DirExists(configDir)) {
         wxFileName::Mkdir(configDir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
     }
-    return std::filesystem::path(configDir.ToStdString()) / "settings.json";
+    return std::filesystem::path(configDir.ToStdString());
+}
+
+std::filesystem::path SettingsManager::GetSettingsFilePath() const {
+    return GetConfigDir() / "settings.json";
 }
 
 void SettingsManager::Load() {

@@ -39,7 +39,8 @@ public:
     // Updates
     bool autoUpdate = false;
 
+    std::filesystem::path GetConfigDir() const;
+    std::filesystem::path GetSettingsFilePath() const;
 private:
     SettingsManager();
-    std::filesystem::path GetSettingsFilePath() const;
 };
