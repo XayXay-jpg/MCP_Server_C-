@@ -164,7 +164,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                 token_valid = true;
             } else if (!token_provided.empty()) {
                 auto& sm = SettingsManager::Get();
-                if (sm.appMode.find("Child") != std::string::npos && token_provided == sm.parentMasterToken && !sm.parentMasterToken.empty()) {
+                if (!sm.parentMasterToken.empty() && token_provided == sm.parentMasterToken) {
                     if (req.has_header("X-MCP-Signature")) {
                         std::string sig = req.get_header_value("X-MCP-Signature");
                         std::string expected_sig = generate_hmac_sha256(sm.parentEncryptionKey, req.body);
@@ -360,7 +360,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
         }
 
         auto& sm_mode = SettingsManager::Get();
-        bool is_child_mode = sm_mode.appMode.find("Child") != std::string::npos;
+        bool is_child_mode = !sm_mode.parentMasterToken.empty();
         
         mcp_log("[Info] POST Request from Token: " + token_display);
         mcp_log("[Info] Raw Payload: " + req.body);
@@ -485,7 +485,6 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
         try {
             json data = json::parse(req.body);
             auto& sm = SettingsManager::Get();
-            if (sm.appMode.find("Child") != std::string::npos) {
                 std::string parent_hostname = data.value("parent_hostname", "Parent Node");
                 std::string parent_ip = req.remote_addr;
                 
@@ -508,9 +507,23 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                 sm.parentEncryptionKey = data.value("encryption_key", "");
                 sm.Save();
                 mcp_log("[Info] Node successfully configured by Parent.");
-                if (g_notify_callback) g_notify_callback("Cluster Configuration", "Received configuration from Parent node.");
+                if (g_notify_callback) g_notify_callback("Cluster Configuration", "Received configuration from Parent node '" + parent_hostname + "'.");
                 
-                ClusterManager::GetInstance().RegisterNodeRequest("parent", parent_ip, parent_hostname, "Parent Server");
+                // Store parent node with all metadata
+                ClusterManager::GetInstance().RegisterNodeRequest("parent", parent_ip, parent_hostname, data.value("parent_platform", "Unknown"));
+                {
+                    // Update extended metadata for parent node
+                    auto nodes = ClusterManager::GetInstance().GetNodes();
+                    for (auto& n : nodes) {
+                        if (n.id == "parent") {
+                            n.os_version = data.value("parent_platform", "");
+                            n.local_ip = data.value("parent_ip", parent_ip);
+                            n.app_version = data.value("parent_version", "");
+                            n.is_parent = true;
+                            break;
+                        }
+                    }
+                }
                 ClusterManager::GetInstance().SetNodeStatus("parent", "connected");
                 if (g_refresh_cluster_callback) g_refresh_cluster_callback();
                 
@@ -525,17 +538,18 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
 #else
                 "Linux";
 #endif
+                // Collect local IP
+                std::string localIp = req.local_addr.empty() ? "Unknown" : req.local_addr;
 
                 json resp;
                 resp["status"] = "ok";
                 resp["hostname"] = hostnameStr;
                 resp["platform"] = platformStr;
+                resp["local_ip"] = localIp;
+                resp["app_version"] = "0.1.8";
 
                 res.status = 200;
                 res.set_content(resp.dump(), "application/json");
-                return;
-            }
-            res.status = 400;
         } catch (...) {
             res.status = 400;
         }
@@ -551,9 +565,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
 
     std::thread([]() {
         std::this_thread::sleep_for(std::chrono::seconds(2));
-        if (SettingsManager::Get().appMode.find("Parent") != std::string::npos) {
-            ClusterManager::GetInstance().ReconnectAllNodes();
-        }
+        ClusterManager::GetInstance().ReconnectAllNodes();
     }).detach();
 
     svr.listen(host.c_str(), port);

@@ -748,57 +748,80 @@ void Windows::SetupUI() {
     clusterHeaderSizer->Add(lblClusterSub, 0, wxLEFT | wxRIGHT | wxBOTTOM, 20);
     clusterHeaderPanel->SetSizer(clusterHeaderSizer);
     
-    clusterMainSizer->Add(clusterHeaderPanel, 0, wxEXPAND | wxBOTTOM, 20);
+    clusterMainSizer->Add(clusterHeaderPanel, 0, wxEXPAND | wxBOTTOM, 0);
     
-    // Content area with padding
-    wxBoxSizer* clusterContentSizer = new wxBoxSizer(wxVERTICAL);
-    // Create a card for the list
-    wxPanel* clusterCard = new wxPanel(clusterContainer, wxID_ANY);
-    clusterCard->SetBackgroundColour(wxColour("#18181B")); // Zinc 900 Card
-    wxBoxSizer* clusterCardSizer = new wxBoxSizer(wxVERTICAL);
+    // Create topology panel (fills all space)
+    topoPanel = new ClusterTopologyPanel(clusterContainer, wxID_ANY);
+    topoPanel->onAction = [this](const std::string& nodeId, ClusterTopologyAction action) {
+        switch (action) {
+        case CTA_ADD_CHILD: {
+            wxCommandEvent evt;
+            OnAddNode(evt);
+            break;
+        }
+        case CTA_RECONNECT: {
+            ClusterManager::GetInstance().SetNodeStatus(nodeId, "connecting...");
+            topoPanel->RefreshTopology();
+            std::thread([nodeId]() {
+                ClusterManager::GetInstance().ApproveNode(nodeId);
+            }).detach();
+            break;
+        }
+        case CTA_REMOVE: {
+            if (wxMessageBox("Remove node '" + wxString(nodeId) + "'?", "Confirm",
+                             wxYES_NO | wxICON_WARNING) == wxYES) {
+                ClusterManager::GetInstance().RemoveNode(nodeId);
+                topoPanel->RefreshTopology();
+            }
+            break;
+        }
+        case CTA_RENAME: {
+            wxTextEntryDialog dlg(this, "Enter new name for node '" + wxString(nodeId) + "':", "Rename Node", wxString(nodeId));
+            if (dlg.ShowModal() == wxID_OK) {
+                ClusterManager::GetInstance().UpdateNodeId(nodeId, dlg.GetValue().ToStdString());
+                topoPanel->RefreshTopology();
+            }
+            break;
+        }
+        case CTA_APPROVE: {
+            ClusterManager::GetInstance().SetNodeStatus(nodeId, "connecting...");
+            topoPanel->RefreshTopology();
+            std::thread([nodeId]() {
+                ClusterManager::GetInstance().ApproveNode(nodeId);
+            }).detach();
+            break;
+        }
+        case CTA_REJECT: {
+            ClusterManager::GetInstance().RemoveNode(nodeId);
+            topoPanel->RefreshTopology();
+            break;
+        }
+        case CTA_DETAILS: {
+            ClusterNode node;
+            if (ClusterManager::GetInstance().GetNode(nodeId, node)) {
+                wxString info;
+                info << "ID: " << wxString(node.id) << "\n";
+                info << "Hostname: " << wxString(node.hostname) << "\n";
+                info << "IP: " << wxString(node.ip_address) << "\n";
+                info << "Platform: " << wxString(node.platform) << "\n";
+                if (!node.os_version.empty()) info << "OS: " << wxString(node.os_version) << "\n";
+                if (!node.local_ip.empty()) info << "Local IP: " << wxString(node.local_ip) << "\n";
+                if (!node.app_version.empty()) info << "Version: " << wxString(node.app_version) << "\n";
+                info << "Status: " << wxString(node.status) << "\n";
+                if (node.last_seen > 0) {
+                    char buf[64]; time_t t = node.last_seen;
+                    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", localtime(&t));
+                    info << "Last seen: " << wxString(buf) << "\n";
+                }
+                wxMessageBox(info, "Node Details — " + wxString(node.hostname), wxOK | wxICON_INFORMATION);
+            }
+            break;
+        }
+        default: break;
+        }
+    };
     
-    listNodes = new wxListCtrl(clusterCard, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxBORDER_NONE | wxLC_SINGLE_SEL | wxLC_HRULES | wxLC_EDIT_LABELS);
-    listNodes->Bind(wxEVT_LIST_END_LABEL_EDIT, &Windows::OnNodeIdEdited, this);
-    listNodes->InsertColumn(0, lang.GetString("NODE_ID"), wxLIST_FORMAT_LEFT, 150);
-    listNodes->InsertColumn(1, lang.GetString("HOSTNAME"), wxLIST_FORMAT_LEFT, 150);
-    listNodes->InsertColumn(2, lang.GetString("IP_ADDRESS"), wxLIST_FORMAT_LEFT, 130);
-    listNodes->InsertColumn(3, lang.GetString("COL_STATUS"), wxLIST_FORMAT_LEFT, 100);
-    listNodes->InsertColumn(4, lang.GetString("PLATFORM"), wxLIST_FORMAT_LEFT, 120);
-    listNodes->SetBackgroundColour(wxColour("#18181B")); 
-    listNodes->SetTextColour(wxColour("#E4E4E7")); // Zinc 200
-    listNodes->SetFont(wxFontInfo(10));
-    
-    // Action buttons using standard CustomButton
-    wxBoxSizer* clusterBtnSizer = new wxBoxSizer(wxHORIZONTAL);
-    btnAddNode = new CustomButton(clusterCard, ID_BTN_ADD_NODE, lang.GetString("BTN_ADD_NODE"), wxDefaultPosition, wxSize(170, 36));
-    btnAddNode->SetBackgroundColour(wxColour("#27272A"));
-    btnAddNode->SetForegroundColour(wxColour("#F4F4F5"));
-    
-    btnApproveNode = new CustomButton(clusterCard, ID_BTN_APPROVE_NODE, lang.GetString("BTN_APPROVE"), wxDefaultPosition, wxSize(170, 36));
-    btnApproveNode->SetBackgroundColour(wxColour("#2563EB")); // Primary Blue
-    btnApproveNode->SetForegroundColour(wxColour("#FFFFFF"));
-    
-    btnRejectNode = new CustomButton(clusterCard, ID_BTN_REJECT_NODE, lang.GetString("BTN_REJECT"), wxDefaultPosition, wxSize(170, 36));
-    btnRejectNode->SetBackgroundColour(wxColour("#EF4444")); // Destructive Red
-    btnRejectNode->SetForegroundColour(wxColour("#FFFFFF"));
-    
-    clusterBtnSizer->Add(btnAddNode, 0, wxRIGHT, 10);
-    clusterBtnSizer->Add(btnApproveNode, 0, wxRIGHT, 10);
-    
-    btnReconnectNode = new CustomButton(clusterCard, ID_BTN_RECONNECT_NODE, lang.GetString("BTN_RECONNECT"), wxDefaultPosition, wxSize(170, 36));
-    btnReconnectNode->SetBackgroundColour(wxColour("#F59E0B")); // Amber 500
-    btnReconnectNode->SetForegroundColour(wxColour("#FFFFFF"));
-    
-    clusterBtnSizer->Add(btnReconnectNode, 0, wxRIGHT, 10);
-    clusterBtnSizer->Add(btnRejectNode, 0, 0, 0);
-    
-    clusterCardSizer->Add(clusterBtnSizer, 0, wxALL, 15);
-    clusterCardSizer->Add(listNodes, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 15);
-    clusterCard->SetSizer(clusterCardSizer);
-    
-    clusterContentSizer->Add(clusterCard, 1, wxEXPAND | wxALL, 20);
-    clusterMainSizer->Add(clusterContentSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20);
-    
+    clusterMainSizer->Add(topoPanel, 1, wxEXPAND);
     clusterContainer->SetSizer(clusterMainSizer);
     rootBook->AddPage(clusterContainer, "ClusterContainer");
     
@@ -869,17 +892,7 @@ void Windows::SetupUI() {
     // --- System & Behavior ---
     addSectionHeader(lang.GetString("GS_SYSTEM"), lblSecSystem);
     
-    wxBoxSizer* appModeSizer = new wxBoxSizer(wxHORIZONTAL);
-    lblAppMode = new wxStaticText(pageGlobalSettings, wxID_ANY, lang.GetString("GS_APP_MODE"));
-    lblAppMode->SetForegroundColour(fgColor);
-    wxArrayString modeChoices;
-    modeChoices.Add(lang.GetString("GS_MODE_PARENT"));
-    modeChoices.Add(lang.GetString("GS_MODE_CHILD"));
-    choiceAppMode = new wxChoice(pageGlobalSettings, wxID_ANY, wxDefaultPosition, wxDefaultSize, modeChoices);
-    choiceAppMode->SetStringSelection(sm.appMode);
-    appModeSizer->Add(lblAppMode, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
-    appModeSizer->Add(choiceAppMode, 0, wxALIGN_CENTER_VERTICAL);
-    wsSizer->Add(appModeSizer, 0, wxBOTTOM, 15);
+
     
     chkLaunchOnStartup = new wxCheckBox(pageGlobalSettings, wxID_ANY, lang.GetString("GS_LAUNCH_STARTUP"));
     chkLaunchOnStartup->SetValue(sm.launchOnStartup);
@@ -1011,7 +1024,7 @@ void Windows::SetupUI() {
     // Bind Setting events
     chkLaunchOnStartup->Bind(wxEVT_CHECKBOX, &Windows::OnSettingChanged, this);
     chkAutoStartServer->Bind(wxEVT_CHECKBOX, &Windows::OnSettingChanged, this);
-    choiceAppMode->Bind(wxEVT_CHOICE, &Windows::OnSettingChanged, this);
+    chkLaunchOnStartup->Bind(wxEVT_CHECKBOX, &Windows::OnSettingChanged, this);
     chkMinimizeToTray->Bind(wxEVT_CHECKBOX, &Windows::OnSettingChanged, this);
     chkShowNotifications->Bind(wxEVT_CHECKBOX, &Windows::OnSettingChanged, this);
     choiceLogRetention->Bind(wxEVT_CHOICE, &Windows::OnSettingChanged, this);
@@ -1287,38 +1300,12 @@ void Windows::UpdateLanguage() {
     if (lblCurrentVersion) lblCurrentVersion->SetLabel(lang.GetString("LBL_VERSION") + APP_VERSION);
     btnCheckUpdates->SetLabel(lang.GetString("GS_CHECK_UPDATES"));
     
-    if (lblAppMode) lblAppMode->SetLabel(lang.GetString("GS_APP_MODE"));
-    if (choiceAppMode) {
-        int sel = choiceAppMode->GetSelection();
-        choiceAppMode->SetString(0, lang.GetString("GS_MODE_PARENT"));
-        choiceAppMode->SetString(1, lang.GetString("GS_MODE_CHILD"));
-        choiceAppMode->SetSelection(sel);
-    }
+
     
     // Cluster UI
     if (lblClusterTitle) lblClusterTitle->SetLabel(lang.GetString("CLUSTER_MANAGEMENT"));
     if (lblClusterSub) lblClusterSub->SetLabel(lang.GetString("CLUSTER_SUB"));
-    if (btnAddNode) btnAddNode->SetLabel(lang.GetString("BTN_ADD_NODE"));
-    if (btnApproveNode) btnApproveNode->SetLabel(lang.GetString("BTN_APPROVE"));
-    if (btnRejectNode) btnRejectNode->SetLabel(lang.GetString("BTN_REJECT"));
-    
-    // Tools UI
-    if (lblToolsHeader) lblToolsHeader->SetLabel(lang.GetString("TOOLS_MANAGEMENT"));
-    
-    if (listNodes && listNodes->GetColumnCount() == 5) {
-        wxListItem col;
-        col.SetMask(wxLIST_MASK_TEXT);
-        col.SetText(lang.GetString("NODE_ID"));
-        listNodes->SetColumn(0, col);
-        col.SetText(lang.GetString("HOSTNAME"));
-        listNodes->SetColumn(1, col);
-        col.SetText(lang.GetString("IP_ADDRESS"));
-        listNodes->SetColumn(2, col);
-        col.SetText(lang.GetString("STATUS"));
-        listNodes->SetColumn(3, col);
-        col.SetText(lang.GetString("PLATFORM"));
-        listNodes->SetColumn(4, col);
-    }
+    // Removed old listNodes headers update here
     
     pageGlobalSettings->Layout();
     
@@ -1371,39 +1358,12 @@ void Windows::OnSidebarCluster(wxCommandEvent& event) {
     RefreshNodesList();
 }
 
-void Windows::OnApproveNode(wxCommandEvent& event) {
-    long item = listNodes->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
-    if (item == -1) {
-        wxMessageBox("Please select a node first.", "Error", wxICON_ERROR);
-        return;
-    }
-    
-    std::string nodeId = listNodes->GetItemText(item).ToStdString();
-    ClusterManager::GetInstance().ApproveNode(nodeId);
-    RefreshNodesList();
-}
-
-void Windows::OnRejectNode(wxCommandEvent& event) {
-    long item = listNodes->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
-    if (item == -1) {
-        wxMessageBox("Please select a node first.", "Error", wxICON_ERROR);
-        return;
-    }
-    
-    std::string nodeId = listNodes->GetItemText(item).ToStdString();
-    ClusterManager::GetInstance().RemoveNode(nodeId);
-    RefreshNodesList();
-}
-
 void Windows::OnAddNode(wxCommandEvent& event) {
-    // Show a dialog to manually add a node
     wxTextEntryDialog dlg(this, "Enter Child Node address (e.g. 192.168.1.100:3000):", "Add Manual Node");
     if (dlg.ShowModal() == wxID_OK) {
         std::string url = dlg.GetValue().ToStdString();
-        // Strip any protocol prefix — we store only ip:port
         if (url.find("http://") == 0) url = url.substr(7);
         if (url.find("https://") == 0) url = url.substr(8);
-        // Remove trailing slash
         while (!url.empty() && url.back() == '/') url.pop_back();
         
         std::string nodeId = "child_" + std::to_string(rand() % 10000);
@@ -1414,60 +1374,9 @@ void Windows::OnAddNode(wxCommandEvent& event) {
     }
 }
 
-void Windows::OnReconnectNode(wxCommandEvent& event) {
-    long item = -1;
-    item = listNodes->GetNextItem(item, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
-    if (item != -1) {
-        std::string id = listNodes->GetItemText(item).ToStdString();
-        ClusterManager::GetInstance().SetNodeStatus(id, "connecting...");
-        RefreshNodesList();
-        
-        std::thread([id]() {
-            ClusterManager::GetInstance().ApproveNode(id);
-        }).detach();
-    } else {
-        std::thread([]() {
-            ClusterManager::GetInstance().ReconnectAllNodes();
-        }).detach();
-    }
-}
-
-void Windows::OnNodeIdEdited(wxListEvent& event) {
-    long item = event.GetIndex();
-    wxString newId = event.GetLabel();
-    if (newId.IsEmpty() || item == -1) {
-        event.Veto();
-        return;
-    }
-    
-    // Get the old ID which is currently in the list before the edit is accepted
-    std::string oldId = listNodes->GetItemText(item).ToStdString();
-    
-    // Update the ID in the ClusterManager
-    if (!ClusterManager::GetInstance().UpdateNodeId(oldId, newId.ToStdString())) {
-        wxMessageBox("Node ID already exists or invalid.", "Error", wxICON_ERROR);
-        event.Veto();
-        return;
-    }
-    
-    // Let wxWidgets accept the new label
-    event.Allow();
-}
-
 void Windows::RefreshNodesList() {
-    listNodes->DeleteAllItems();
-    
-    auto nodes = ClusterManager::GetInstance().GetNodes();
-    long idx = 0;
-    
-    for (const auto& node : nodes) {
-        listNodes->InsertItem(idx, node.id);
-        listNodes->SetItem(idx, 1, node.hostname);
-        listNodes->SetItem(idx, 2, node.ip_address);
-        listNodes->SetItem(idx, 3, node.status);
-        listNodes->SetItem(idx, 4, node.platform);
-        listNodes->SetItemBackgroundColour(idx, wxColour("#18181B"));
-        idx++;
+    if (topoPanel) {
+        topoPanel->RefreshTopology();
     }
 }
 
@@ -2032,7 +1941,7 @@ void Windows::OnSettingChanged(wxCommandEvent& event) {
     sm.minimizeToTray = chkMinimizeToTray->GetValue();
     sm.showNotifications = chkShowNotifications->GetValue();
     sm.logRetention = choiceLogRetention->GetStringSelection().ToStdString();
-    sm.appMode = choiceAppMode->GetStringSelection().ToStdString();
+    sm.launchOnStartup = chkLaunchOnStartup->GetValue();
     
     sm.appLock = chkAppLock->GetValue();
     sm.maskSecrets = chkMaskSecrets->GetValue();
@@ -2214,10 +2123,7 @@ wxBEGIN_EVENT_TABLE(Windows, wxFrame)
     EVT_GRID_CELL_CHANGED(Windows::OnTokenCellChanged)
 
     EVT_TEXT(ID_TXT_CUSTOM_DOMAIN,  Windows::OnCustomDomainChanged)
-    EVT_BUTTON(ID_BTN_APPROVE_NODE, Windows::OnApproveNode)
-    EVT_BUTTON(ID_BTN_REJECT_NODE,  Windows::OnRejectNode)
-    EVT_BUTTON(ID_BTN_ADD_NODE,     Windows::OnAddNode)
-    EVT_BUTTON(ID_BTN_RECONNECT_NODE, Windows::OnReconnectNode)
+
     EVT_BUTTON(ID_BTN_TOGGLE_COMPACT, Windows::OnToggleCompact)
     EVT_BUTTON(ID_BTN_TOGGLE_THEME, Windows::OnToggleTheme)
     EVT_TIMER(ID_ANIM_TIMER, Windows::OnAnimTimer)

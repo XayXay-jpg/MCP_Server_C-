@@ -25,7 +25,6 @@ void ClusterManager::LoadNodes() {
             ClusterNode node;
             node.id = item.value("id", "");
             node.ip_address = item.value("ip_address", "");
-            // Reset transient statuses so they don't stick across restarts
             std::string saved_status = item.value("status", "pending");
             if (saved_status == "connected" || saved_status == "offline" || saved_status == "error_403" || saved_status == "connecting...") {
                 node.status = (node.id == "parent") ? saved_status : "pending";
@@ -34,6 +33,10 @@ void ClusterManager::LoadNodes() {
             }
             node.hostname = item.value("hostname", "");
             node.platform = item.value("platform", "");
+            node.os_version = item.value("os_version", "");
+            node.local_ip = item.value("local_ip", "");
+            node.app_version = item.value("app_version", "");
+            node.is_parent = item.value("is_parent", false);
             node.last_seen = item.value("last_seen", 0LL);
             node.master_token = item.value("master_token", "");
             node.encryption_key = item.value("encryption_key", "");
@@ -51,6 +54,10 @@ void ClusterManager::SaveNodes() {
             {"status", n.status},
             {"hostname", n.hostname},
             {"platform", n.platform},
+            {"os_version", n.os_version},
+            {"local_ip", n.local_ip},
+            {"app_version", n.app_version},
+            {"is_parent", n.is_parent},
             {"last_seen", n.last_seen},
             {"master_token", n.master_token},
             {"encryption_key", n.encryption_key}
@@ -128,14 +135,27 @@ bool ClusterManager::ApproveNode(const std::string& id) {
     std::thread([id, ip, mt, ek]() {
         httplib::Client cli("http://" + ip);
         cli.set_connection_timeout(5, 0);
+        
+        // Gather parent metadata to send to child
         const char* hn_env = std::getenv("HOSTNAME");
         if (!hn_env) hn_env = std::getenv("COMPUTERNAME");
         std::string my_hostname = hn_env ? hn_env : "ParentNode";
         
+#ifdef _WIN32
+        std::string my_platform = "Windows";
+#elif defined(__APPLE__)
+        std::string my_platform = "macOS";
+#else
+        std::string my_platform = "Linux";
+#endif
+        
         json req = {
             {"master_token", mt},
             {"encryption_key", ek},
-            {"parent_hostname", my_hostname}
+            {"parent_hostname", my_hostname},
+            {"parent_platform", my_platform},
+            {"parent_ip", ip},
+            {"parent_version", "0.1.8"}
         };
         if (auto res = cli.Post("/cluster/configure", req.dump(), "application/json")) {
             if (res->status == 200) {
@@ -149,9 +169,14 @@ bool ClusterManager::ApproveNode(const std::string& id) {
                         if (node.id == id) {
                             if (!hn.empty()) node.hostname = hn;
                             node.platform = pt;
+                            node.os_version = resp.value("os_version", "");
+                            node.local_ip = resp.value("local_ip", "");
+                            node.app_version = resp.value("app_version", "unknown");
                             node.status = "connected";
+                            node.last_seen = std::chrono::duration_cast<std::chrono::seconds>(
+                                std::chrono::system_clock::now().time_since_epoch()).count();
                             ClusterManager::GetInstance().SaveNodes();
-                            mcp_log("[Info] Successfully connected to child node: " + hn + " (" + pt + ")");
+                            mcp_log("[Info] Connected to child: " + hn + " (" + pt + ") at " + ip);
                             break;
                         }
                     }

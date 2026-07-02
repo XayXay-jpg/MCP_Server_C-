@@ -3,6 +3,7 @@
 #include <wx/grid.h>
 #include <wx/simplebook.h>
 #include "SlideBook.h"
+#include "cluster_topology.h"
 #include <thread>
 #include <atomic>
 #include <wx/taskbar.h>
@@ -86,11 +87,8 @@ private:
     wxPanel* clusterContainer; // Holds Cluster UI
     wxStaticText* lblClusterTitle = nullptr;
     wxStaticText* lblClusterSub = nullptr;
-    wxListCtrl* listNodes = nullptr; // List of connected nodes
-    CustomButton* btnApproveNode = nullptr;
-    CustomButton* btnRejectNode = nullptr;
-    CustomButton* btnAddNode = nullptr;
-    CustomButton* btnReconnectNode = nullptr;
+    ClusterTopologyPanel* topoPanel = nullptr; // Topology view
+
     
     wxPanel* toolsContainer; // Holds Tools page
     wxStaticText* lblToolsHeader = nullptr;
@@ -182,8 +180,6 @@ private:
     wxStaticText* lblSecWorkspace = nullptr;
     wxStaticText* lblLogRetention = nullptr;
     wxStaticText* lblThemeLabel = nullptr;
-    wxStaticText* lblAppMode = nullptr;
-    wxChoice* choiceAppMode = nullptr;
     wxCheckBox* chkLaunchOnStartup = nullptr;
     wxCheckBox* chkAutoStartServer = nullptr;
     wxCheckBox* chkMinimizeToTray = nullptr;
@@ -248,11 +244,7 @@ private:
     void OnCopyTokenUrl(wxCommandEvent& event);
     void OnCheckNetwork(wxCommandEvent& event);
     void OnCustomDomainChanged(wxCommandEvent& event);
-    void OnApproveNode(wxCommandEvent& event);
-    void OnRejectNode(wxCommandEvent& event);
     void OnAddNode(wxCommandEvent& event);
-    void OnReconnectNode(wxCommandEvent& event);
-    void OnNodeIdEdited(wxListEvent& event);
     
     void OnGridSize(wxSizeEvent& event);
     

@@ -33,7 +33,7 @@ private:
         dictionary["EN"]["LOGS"] = wxString::FromUTF8("LOGS");
         dictionary["EN"]["SERVER_MANAGER"] = wxString::FromUTF8("MCP SERVER MANAGER");
         dictionary["EN"]["SERVER_LOCAL"] = wxString::FromUTF8("LOCAL SERVER");
-        dictionary["EN"]["CLUSTER_NODES"] = wxString::FromUTF8("Cluster Nodes");
+        dictionary["EN"]["CLUSTER_NODES"] = wxString::FromUTF8("Family Group");
         dictionary["EN"]["TOOLS"] = wxString::FromUTF8("Tools");
         dictionary["EN"]["GLOBAL_SETTINGS"] = wxString::FromUTF8("GLOBAL SETTINGS");
         dictionary["EN"]["STATUS"] = wxString::FromUTF8("Status: ");
@@ -58,9 +58,9 @@ private:
             "3. Update your remote client configuration with the external URL/IP.\n"
             "Make sure your firewall allows incoming connections on the specified port."
         );
-        dictionary["EN"]["CLUSTER_NODES"] = wxString::FromUTF8("Cluster Nodes");
-        dictionary["EN"]["CLUSTER_MANAGEMENT"] = wxString::FromUTF8("Cluster Management");
-        dictionary["EN"]["CLUSTER_SUB"] = wxString::FromUTF8("Manage connected child nodes and handle incoming requests");
+        dictionary["EN"]["CLUSTER_NODES"] = wxString::FromUTF8("Family Nodes");
+        dictionary["EN"]["CLUSTER_MANAGEMENT"] = wxString::FromUTF8("Family Group");
+        dictionary["EN"]["CLUSTER_SUB"] = wxString::FromUTF8("Manage connected family nodes and handle incoming requests");
         dictionary["EN"]["NODE_ID"] = wxString::FromUTF8("Node ID");
         dictionary["EN"]["HOSTNAME"] = wxString::FromUTF8("Hostname");
         dictionary["EN"]["IP_ADDRESS"] = wxString::FromUTF8("IP Address");
@@ -145,8 +145,8 @@ private:
         dictionary["EN"]["LBL_NOT_REACH"] = wxString::FromUTF8("Not reachable");
         dictionary["EN"]["LBL_SERVER_LOGS"] = wxString::FromUTF8("SERVER LOGS");
         dictionary["EN"]["LBL_UNKNOWN"] = wxString::FromUTF8("Unknown");
-        dictionary["EN"]["CLUSTER_MANAGEMENT"] = wxString::FromUTF8("CLUSTER MANAGEMENT");
-        dictionary["EN"]["CLUSTER_SUB"] = wxString::FromUTF8("Manage connected child nodes and handle incoming requests");
+        dictionary["EN"]["CLUSTER_MANAGEMENT"] = wxString::FromUTF8("FAMILY GROUP");
+        dictionary["EN"]["CLUSTER_SUB"] = wxString::FromUTF8("Manage connected family nodes and handle incoming requests");
         dictionary["EN"]["BTN_ADD_NODE"] = wxString::FromUTF8("Add Manual Node");
         dictionary["EN"]["BTN_APPROVE"] = wxString::FromUTF8("Approve Request");
         dictionary["EN"]["BTN_REJECT"] = wxString::FromUTF8("Remove Node");
@@ -168,7 +168,7 @@ private:
         dictionary["RU"]["LOGS"] = wxString::FromUTF8("ЛОГИ");
         dictionary["RU"]["SERVER_MANAGER"] = wxString::FromUTF8("МЕНЕДЖЕР MCP СЕРВЕРА");
         dictionary["RU"]["SERVER_LOCAL"] = wxString::FromUTF8("ЛОКАЛЬНЫЙ СЕРВЕР");
-        dictionary["RU"]["CLUSTER_NODES"] = wxString::FromUTF8("Узлы Кластера");
+        dictionary["RU"]["CLUSTER"] = wxString::FromUTF8("СЕМЕЙНАЯ ГРУППА");
         dictionary["RU"]["TOOLS"] = wxString::FromUTF8("Инструменты");
         dictionary["RU"]["GLOBAL_SETTINGS"] = wxString::FromUTF8("НАСТРОЙКИ");
         dictionary["RU"]["STATUS"] = wxString::FromUTF8("Статус: ");
@@ -193,9 +193,8 @@ private:
             "3. Обновите конфигурацию удаленного клиента, указав внешний URL/IP.\n"
             "Убедитесь, что ваш брандмауэр разрешает входящие соединения на указанном порту."
         );
-        dictionary["RU"]["CLUSTER_NODES"] = wxString::FromUTF8("Узлы кластера");
-        dictionary["RU"]["CLUSTER_MANAGEMENT"] = wxString::FromUTF8("УПРАВЛЕНИЕ КЛАСТЕРОМ");
-        dictionary["RU"]["CLUSTER_SUB"] = wxString::FromUTF8("Управление подключенными дочерними узлами и обработка запросов");
+        dictionary["RU"]["CLUSTER_MANAGEMENT"] = wxString::FromUTF8("СЕМЕЙНАЯ ГРУППА");
+        dictionary["RU"]["CLUSTER_SUB"] = wxString::FromUTF8("Управление подключенными узлами семьи и обработка запросов");
         dictionary["RU"]["NODE_ID"] = wxString::FromUTF8("Идентификатор");
         dictionary["RU"]["HOSTNAME"] = wxString::FromUTF8("Имя хоста");
         dictionary["RU"]["IP_ADDRESS"] = wxString::FromUTF8("IP адрес");
