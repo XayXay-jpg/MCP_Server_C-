@@ -1361,17 +1361,45 @@ void Windows::OnSidebarCluster(wxCommandEvent& event) {
     RefreshNodesList();
 }
 
+class AddNodeDialog : public wxDialog {
+    wxTextCtrl* addressCtrl;
+    wxTextCtrl* nameCtrl;
+public:
+    AddNodeDialog(wxWindow* parent) : wxDialog(parent, wxID_ANY, "Add Child Node", wxDefaultPosition, wxSize(400, 230)) {
+        wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+        
+        sizer->Add(new wxStaticText(this, wxID_ANY, "Child Node Address (e.g. 192.168.1.100:3000):"), 0, wxALL, 10);
+        addressCtrl = new wxTextCtrl(this, wxID_ANY);
+        sizer->Add(addressCtrl, 0, wxEXPAND | wxLEFT | wxRIGHT, 10);
+        
+        sizer->Add(new wxStaticText(this, wxID_ANY, "Server Name (optional):"), 0, wxALL, 10);
+        nameCtrl = new wxTextCtrl(this, wxID_ANY);
+        sizer->Add(nameCtrl, 0, wxEXPAND | wxLEFT | wxRIGHT, 10);
+        
+        sizer->Add(CreateButtonSizer(wxOK | wxCANCEL), 0, wxEXPAND | wxALL, 10);
+        
+        SetSizer(sizer);
+        Center();
+    }
+    wxString GetAddress() const { return addressCtrl->GetValue(); }
+    wxString GetName() const { return nameCtrl->GetValue(); }
+};
+
 void Windows::OnAddNode(wxCommandEvent& event) {
-    wxTextEntryDialog dlg(this, "Enter Child Node address (e.g. 192.168.1.100:3000):", "Add Manual Node");
+    AddNodeDialog dlg(this);
     if (dlg.ShowModal() == wxID_OK) {
-        std::string url = dlg.GetValue().ToStdString();
+        std::string url = dlg.GetAddress().ToStdString();
+        std::string name = dlg.GetName().ToStdString();
+        
+        if (url.empty()) return;
+        
         if (url.find("http://") == 0) url = url.substr(7);
         if (url.find("https://") == 0) url = url.substr(8);
         while (!url.empty() && url.back() == '/') url.pop_back();
         
-        std::string nodeId = "child_" + std::to_string(rand() % 10000);
+        std::string nodeId = name.empty() ? ("child_" + std::to_string(rand() % 10000)) : name;
         
-        ClusterManager::GetInstance().RegisterNodeRequest(nodeId, url, "", "Unknown");
+        ClusterManager::GetInstance().RegisterNodeRequest(nodeId, url, name, "Unknown");
         ClusterManager::GetInstance().ApproveNode(nodeId);
         RefreshNodesList();
     }
