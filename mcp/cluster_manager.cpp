@@ -217,7 +217,7 @@ bool ClusterManager::ApproveNode(const std::string& id) {
                                 node.master_token = final_mt;
                                 node.encryption_key = final_ek;
                             }
-                            if (!hn.empty()) node.hostname = hn;
+                            if (node.hostname.empty() && !hn.empty()) node.hostname = hn;
                             node.platform = pt;
                             node.os_version = resp.value("os_version", "");
                             node.local_ip = resp.value("local_ip", "");
