@@ -18,6 +18,19 @@
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
+std::string generate_random_string(int length) {
+    static const char alphanum[] =
+        "0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz";
+    std::string tmp_s;
+    tmp_s.reserve(length);
+    for (int i = 0; i < length; ++i) {
+        tmp_s += alphanum[rand() % (sizeof(alphanum) - 1)];
+    }
+    return tmp_s;
+}
+
 std::string GetLocalIP() {
     std::string localIp = "127.0.0.1";
 #ifdef _WIN32

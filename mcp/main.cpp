@@ -37,20 +37,6 @@ struct Session {
 std::mutex sessions_mutex;
 std::map<std::string, std::shared_ptr<Session>> active_sessions;
 
-// Генерация уникального ID для сессии
-std::string generate_session_id() {
-    static const char alphanum[] =
-        "0123456789"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "abcdefghijklmnopqrstuvwxyz";
-    std::string tmp_s;
-    tmp_s.reserve(16);
-    for (int i = 0; i < 16; ++i) {
-        tmp_s += alphanum[rand() % (sizeof(alphanum) - 1)];
-    }
-    return tmp_s;
-}
-
 // Отправка ответа в очередь нужной сессии (для SSE)
 void send_to_session(const std::string& session_id, const json& response) {
     std::lock_guard<std::mutex> lock(sessions_mutex);
@@ -227,7 +213,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
         res.set_header("Cache-Control", "no-cache");
         res.set_header("Connection", "keep-alive");
 
-        std::string session_id = generate_session_id();
+        std::string session_id = generate_random_string(16);
         auto session = std::make_shared<Session>();
         {
             std::lock_guard<std::mutex> lock(sessions_mutex);

@@ -13,6 +13,7 @@ extern std::function<bool(const std::string&, const std::string&)> g_confirm_cal
 extern std::function<void()> g_refresh_cluster_callback;
 void mcp_log(const std::string& message);
 std::string GetLocalIP();
+std::string generate_random_string(int length);
 
 // Глобальное состояние
 extern std::filesystem::path BASE_DIR;

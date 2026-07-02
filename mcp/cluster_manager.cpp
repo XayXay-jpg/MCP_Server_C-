@@ -145,8 +145,21 @@ bool ClusterManager::ApproveNode(const std::string& id) {
             } catch (...) {}
         }
         
+        bool newly_generated = false;
+        std::string final_mt = mt;
+        std::string final_ek = ek;
+        if (final_mt.empty()) {
+            final_mt = "mcp_mt_" + generate_random_string(32);
+            newly_generated = true;
+        }
+        if (final_ek.empty()) {
+            final_ek = generate_random_string(64);
+            newly_generated = true;
+        }
+        
         httplib::Client cli(host, port);
         cli.set_connection_timeout(5, 0);
+        cli.set_read_timeout(60, 0); // User might take a while to click Yes
         
         // Gather parent metadata to send to child
         const char* hn_env = std::getenv("HOSTNAME");
@@ -172,11 +185,11 @@ bool ClusterManager::ApproveNode(const std::string& id) {
                 {"active", t.active}
             });
         }
-        std::string encrypted_tokens = encrypt_aes256(ek, tokens_array.dump());
+        std::string encrypted_tokens = encrypt_aes256(final_ek, tokens_array.dump());
 
         json req = {
-            {"master_token", mt},
-            {"encryption_key", ek},
+            {"master_token", final_mt},
+            {"encryption_key", final_ek},
             {"parent_hostname", my_hostname},
             {"parent_platform", my_platform},
             {"parent_ip", ip},
@@ -193,6 +206,10 @@ bool ClusterManager::ApproveNode(const std::string& id) {
                     std::lock_guard<std::mutex> lk(ClusterManager::GetInstance().mtx);
                     for (auto& node : ClusterManager::GetInstance().nodes) {
                         if (node.id == id) {
+                            if (newly_generated) {
+                                node.master_token = final_mt;
+                                node.encryption_key = final_ek;
+                            }
                             if (!hn.empty()) node.hostname = hn;
                             node.platform = pt;
                             node.os_version = resp.value("os_version", "");
