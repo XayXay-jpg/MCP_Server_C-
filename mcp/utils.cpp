@@ -8,7 +8,9 @@ fs::path BASE_DIR;
 std::atomic<int> g_active_sessions{0};
 std::atomic<int> g_tool_calls{0};
 
+// Определение глобальных переменных
 std::function<void(const std::string&)> g_log_callback = nullptr;
+std::function<void(const std::string&, const std::string&)> g_notify_callback = nullptr;
 
 void mcp_log(const std::string& message) {
     if (g_log_callback) {
@@ -31,19 +33,19 @@ json make_error(const json& id, int code, const std::string& message) {
     return response;
 }
 
-std::optional<fs::path> validate_path(const std::string& user_path) {
+std::optional<fs::path> validate_path(const std::string& user_path, const fs::path& base_dir) {
     try {
-        fs::path full_path = BASE_DIR / user_path;
+        fs::path full_path = base_dir / user_path;
         fs::path resolved_path = fs::weakly_canonical(full_path);
         
-        std::string base_str = BASE_DIR.string();
+        std::string base_str = base_dir.string();
         std::string res_str = resolved_path.string();
         
         if (!base_str.empty() && base_str.back() != fs::path::preferred_separator) {
             base_str += fs::path::preferred_separator;
         }
         
-        if (res_str == BASE_DIR.string() || res_str.rfind(base_str, 0) == 0) {
+        if (res_str == base_dir.string() || res_str.rfind(base_str, 0) == 0) {
             return resolved_path;
         } else {
             mcp_log("[Security] Path validation failed: " + res_str + " is outside sandbox.");

@@ -13,6 +13,8 @@ public:
     void SetIcon(const wxBitmap& icon);
     void SetIndent(int indent);
     void SetTreeLineMode(int mode);
+    void SetBorderRadius(int radius);
+    void SetAlignment(int align);
     
 private:
     void OnPaint(wxPaintEvent& event);
@@ -20,6 +22,7 @@ private:
     void OnLeftUp(wxMouseEvent& event);
     void OnMouseEnter(wxMouseEvent& event);
     void OnMouseLeave(wxMouseEvent& event);
+    void OnAnimTimer(wxTimerEvent& event);
 
     wxString m_label;
     wxColour m_bgColour;
@@ -32,6 +35,12 @@ private:
     bool m_isSelected;
     int m_indent;
     int m_treeLineMode;
+    int m_borderRadius;
+    int m_alignment;
+    
+    wxTimer* m_animTimer;
+    double m_selProgress;
+    double m_hoverProgress;
 
     wxDECLARE_EVENT_TABLE();
 };

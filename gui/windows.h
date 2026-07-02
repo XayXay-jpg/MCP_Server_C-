@@ -2,12 +2,46 @@
 #include "CustomButton.h"
 #include <wx/grid.h>
 #include <wx/simplebook.h>
+#include "SlideBook.h"
 #include <thread>
 #include <atomic>
+#include <wx/taskbar.h>
+#include <wx/timer.h>
+#include <wx/choice.h>
 #include <wx/listctrl.h>
 #include <wx/clipbrd.h>
 
 wxDECLARE_EVENT(wxEVT_SERVER_LOG, wxThreadEvent);
+wxDECLARE_EVENT(wxEVT_SERVER_NOTIFY, wxThreadEvent);
+
+class AnimatedLogo : public wxPanel {
+public:
+    AnimatedLogo(wxWindow* parent, const wxBitmap& bmp);
+    void SetProgress(double progress);
+    
+private:
+    void OnPaint(wxPaintEvent& event);
+    wxImage m_img;
+    double m_progress;
+    wxColour m_bgColour;
+    
+    wxDECLARE_EVENT_TABLE();
+};
+
+class AnimatedText : public wxPanel {
+public:
+    AnimatedText(wxWindow* parent, const wxString& text);
+    void SetProgress(double progress);
+    
+private:
+    void OnPaint(wxPaintEvent& event);
+    wxString m_text;
+    double m_progress;
+    wxColour m_bgColour;
+    wxFont m_font;
+    
+    wxDECLARE_EVENT_TABLE();
+};
 
 class Windows : public wxFrame {
 public:
@@ -15,74 +49,156 @@ public:
     ~Windows();
 
 private:
-    wxPanel* sidebarPanel;
-    wxPanel* mainPanel;
+    wxPanel* sidebarPanel = nullptr;
+    wxPanel* mainPanel = nullptr;
 
-    CustomButton* btnDashboard;
-    CustomButton* btnWorkspace;
-    CustomButton* btnSettings;
-    CustomButton* btnLanguage;
-    CustomButton* btnNetwork;
-    CustomButton* btnLogs;
+    AnimatedText* logoText = nullptr;
+    wxBitmapButton* btnToggleCompact = nullptr;
+    wxBitmapButton* btnToggleTheme = nullptr;
 
-    wxStaticText* lblManager;
-    wxStaticText* lblStatus;
-    wxStaticText* lblStatusValue;
+    CustomButton* btnServerLocal = nullptr;
+    CustomButton* btnCluster = nullptr;
+    CustomButton* btnTools = nullptr;
+    CustomButton* btnGlobalSettings = nullptr;
     
-    wxStaticText* lblWorkspaceStatus;
-    wxStaticText* lblWorkspaceValue;
+    // Tab bar buttons (horizontal)
+    CustomButton* btnTabOverview = nullptr;
+    CustomButton* btnTabConnections = nullptr;
+    CustomButton* btnTabLogs = nullptr;
+    CustomButton* btnTabNodes = nullptr;
+
+    wxPanel* headerPanel = nullptr;
+    wxPanel* statsPanel = nullptr;
+    wxPanel* statsBgPanel = nullptr;
+    AnimatedLogo* logoImg = nullptr;
+    wxStaticText* lblGsHeader = nullptr;
+    wxStaticText* lblManager = nullptr;
+    wxStaticText* lblTokenTitle = nullptr;
+    wxStaticText* lblStrTitle = nullptr;
+    wxStaticText* lblChkTitle = nullptr;
+    wxStaticText* lblStatus = nullptr;
+    wxStaticText* lblStatusValue = nullptr;
     
-    wxSimplebook* contentBook;
+    wxComboBox* comboServerStats = nullptr;
+    
+    SlideBook* rootBook; // Master book to switch between Server View and Global Settings
+    wxPanel* serverContainer; // Holds header and contentBook
+    wxPanel* clusterContainer; // Holds Cluster UI
+    wxStaticText* lblClusterTitle = nullptr;
+    wxStaticText* lblClusterSub = nullptr;
+    wxListCtrl* listNodes = nullptr; // List of connected nodes
+    CustomButton* btnApproveNode = nullptr;
+    CustomButton* btnRejectNode = nullptr;
+    CustomButton* btnAddNode = nullptr;
+    
+    wxPanel* toolsContainer; // Holds Tools page
+    wxStaticText* lblToolsHeader = nullptr;
+    wxScrolledWindow* scrollTools = nullptr;
+    wxBoxSizer* scrollToolsSizer = nullptr;
+    wxPanel* globalSettingsContainer; // Holds pageGlobalSettings
+    
+    SlideBook* contentBook; // Holds server tabs (Overview, Connections, Logs)
     
     // Pages
-    wxPanel* pageDashboard;
-    wxPanel* pageWorkspace;
-    wxPanel* pageLanguage;
-    wxPanel* pageNetwork;
-    wxPanel* pageStub;
+    wxPanel* pageOverview = nullptr;
+    wxPanel* pageConnections = nullptr;
+    wxPanel* pageLogs = nullptr;
+    wxPanel* pageNodes = nullptr;
+    wxScrolledWindow* pageGlobalSettings = nullptr;
+    
+    // Nodes page UI
+    wxChoice* choiceServer = nullptr;
+    wxPanel* nodeStatsPanel = nullptr;
+    wxStaticText* lblNodeCpu = nullptr;
+    wxStaticText* lblNodeRam = nullptr;
+    wxStaticText* lblNodeDisk = nullptr;
+    wxStaticText* lblNodeVram = nullptr;
+    wxGauge* gaugeNodeCpu = nullptr;
+    wxGauge* gaugeNodeRam = nullptr;
+    wxGauge* gaugeNodeDisk = nullptr;
+    wxGauge* gaugeNodeVram = nullptr;
 
     // Dashboard components
-    CustomButton* btnStartStop;
-    wxStaticText* lblLogsHeader;
-    wxTextCtrl* txtLogs;
-    wxStaticText* statSessions;
-    wxStaticText* statErrors;
-    wxStaticText* statTools;
-    wxStaticText* statUptime;
+    CustomButton* btnStartStop = nullptr;
+    
+    // System Stats Panel
+    wxPanel* sysStatsPanel = nullptr;
+    wxStaticText* lblSysCpu = nullptr;
+    wxStaticText* lblSysRam = nullptr;
+    wxStaticText* lblSysDisk = nullptr;
+    wxStaticText* lblSysVram = nullptr;
+    wxGauge* gaugeSysCpu = nullptr;
+    wxGauge* gaugeSysRam = nullptr;
+    wxGauge* gaugeSysDisk = nullptr;
+    wxGauge* gaugeSysVram = nullptr;
+    
+    wxStaticText* lblLogsHeader = nullptr;
+    wxTextCtrl* txtLogs = nullptr;
+    wxStaticText* statSessions = nullptr;
+    wxStaticText* statErrors = nullptr;
+    wxStaticText* statTools = nullptr;
+    wxStaticText* statUptime = nullptr;
     
     // Workspace components
-    wxStaticText* lblWorkspaceTitle;
-    wxTextCtrl* txtWorkspacePath;
-    CustomButton* btnBrowseWorkspace;
-    wxCheckBox* chkCreateMissing;
-    CustomButton* btnSaveWorkspace;
+    wxStaticText* lblWorkspaceTitle = nullptr;
+    wxTextCtrl* txtWorkspacePath = nullptr;
+    CustomButton* btnBrowseWorkspace = nullptr;
+    wxCheckBox* chkCreateMissing = nullptr;
+    CustomButton* btnSaveWorkspace = nullptr;
     
     // Language components
-    CustomButton* btnLangRu;
-    CustomButton* btnLangEn;
+    CustomButton* btnLangRu = nullptr;
+    CustomButton* btnLangEn = nullptr;
     
     // Network components
-    wxStaticText* lblNetworkInstructions;
-    wxStaticText* lblBindInfo;
-    wxStaticText* lblLocalUrl;
-    wxStaticText* lblExternalUrl;
-    wxStaticText* lblPublicIP;
-    wxTextCtrl* txtCustomDomain;
+    wxStaticText* lblNetworkInstructions = nullptr;
+    wxStaticText* lblBindInfo = nullptr;
+    wxStaticText* lblLocalUrl = nullptr;
+    wxStaticText* lblExternalUrl = nullptr;
+    wxStaticText* lblPublicIP = nullptr;
+    wxTextCtrl* txtCustomDomain = nullptr;
     
-    wxGrid* gridTokens;
-    CustomButton* btnCreateToken;
-    CustomButton* btnDeleteToken;
-    CustomButton* btnToggleToken;
+    wxGrid* gridTokens = nullptr;
+    CustomButton* btnCreateToken = nullptr;
+    CustomButton* btnDeleteToken = nullptr;
+    CustomButton* btnToggleToken = nullptr;
+    CustomButton* btnEditPermissions = nullptr;
+    CustomButton* btnCopyTokenUrl = nullptr;
     
-    wxTextCtrl* txtConnString;
-    CustomButton* btnCopyConn;
-    CustomButton* btnCheckNetwork;
-    CustomButton* lblCheckResult;
+    CustomButton* btnCheckNetwork = nullptr;
+    CustomButton* lblCheckResult = nullptr;
     
     
     
-    // Stub components
-    wxStaticText* lblStubMessage;
+    // --- New Global Settings Controls ---
+    // New Pointers for labels to support dynamic translation
+    wxStaticText* lblSecSystem = nullptr;
+    wxStaticText* lblSecStorage = nullptr;
+    wxStaticText* lblSecAppearance = nullptr;
+    wxStaticText* lblSecSecurity = nullptr;
+    wxStaticText* lblSecUpdates = nullptr;
+    wxStaticText* lblSecLanguage = nullptr;
+    wxStaticText* lblSecWorkspace = nullptr;
+    wxStaticText* lblLogRetention = nullptr;
+    wxStaticText* lblThemeLabel = nullptr;
+    wxStaticText* lblAppMode = nullptr;
+    wxChoice* choiceAppMode = nullptr;
+    wxCheckBox* chkLaunchOnStartup = nullptr;
+    wxCheckBox* chkAutoStartServer = nullptr;
+    wxCheckBox* chkMinimizeToTray = nullptr;
+    wxCheckBox* chkShowNotifications = nullptr;
+    wxChoice* choiceLogRetention = nullptr;
+    CustomButton* btnClearCache = nullptr;
+    wxChoice* choiceTheme = nullptr;
+    wxCheckBox* chkCompactMode = nullptr;
+    wxCheckBox* chkAppLock = nullptr;
+    wxCheckBox* chkMaskSecrets = nullptr;
+    wxCheckBox* chkAutoUpdate = nullptr;
+    CustomButton* btnCheckUpdates = nullptr;
+    wxStaticText* lblUpdateStatus = nullptr;
+    
+    // Tray Icon
+    wxTaskBarIcon* trayIcon = nullptr;
 
     bool isServerRunning;
     std::thread serverThread;
@@ -91,19 +207,28 @@ private:
 
     void SetupUI();
     void UpdateLanguage();
-    void ApplyTealTheme();
+    void ApplyTheme();
     
     void UpdateSidebarSelection(CustomButton* selected);
+    void UpdateTabSelection(CustomButton* selected);
     
-    void OnSidebarDashboard(wxCommandEvent& event);
-    void OnSidebarWorkspace(wxCommandEvent& event);
-    void OnSidebarSettings(wxCommandEvent& event);
-    void OnSidebarLanguage(wxCommandEvent& event);
-    void OnSidebarNetwork(wxCommandEvent& event);
-    void OnSidebarLogs(wxCommandEvent& event);
+    void OnSidebarServerLocal(wxCommandEvent& event);
+    void OnSidebarCluster(wxCommandEvent& event);
+    void OnSidebarTools(wxCommandEvent& event);
+    void OnSidebarGlobalSettings(wxCommandEvent& event);
+    
+    void RefreshNodesList();
+    
+    void OnTabConnections(wxCommandEvent& event);
+    void OnTabLogs(wxCommandEvent& event);
+    void OnTabNodes(wxCommandEvent& event);
+    void OnNodeSelected(wxCommandEvent& event);
+    
+    void OnToolToggled(wxCommandEvent& event);
 
     void OnStartStop(wxCommandEvent& event);
     void OnServerLog(wxThreadEvent& event);
+    void OnServerNotify(wxThreadEvent& event);
     void OnTimer(wxTimerEvent& event);
     
     void OnBrowseWorkspace(wxCommandEvent& event);
@@ -115,16 +240,46 @@ private:
     void OnCreateToken(wxCommandEvent& event);
     void OnDeleteToken(wxCommandEvent& event);
     void OnToggleToken(wxCommandEvent& event);
+    void OnEditPermissions(wxCommandEvent& event);
     void OnTokenCellChanged(wxGridEvent& event);
     void SaveTokensFromGrid();
-    void OnCopyConnection(wxCommandEvent& event);
+    void OnCopyTokenUrl(wxCommandEvent& event);
     void OnCheckNetwork(wxCommandEvent& event);
     void OnCustomDomainChanged(wxCommandEvent& event);
+    void OnApproveNode(wxCommandEvent& event);
+    void OnRejectNode(wxCommandEvent& event);
+    void OnAddNode(wxCommandEvent& event);
+    
+    void OnGridSize(wxSizeEvent& event);
     
     void RefreshTokenList();
+    void RefreshToolsList();
     void RefreshConnectionUrls();
 
-    wxTimer* m_timer;
+    void OnCloseWindow(wxCloseEvent& event);
+    void OnTrayIconActivated(wxTaskBarIconEvent& event);
+    
+    // Settings Handlers
+    void OnSettingChanged(wxCommandEvent& event);
+    void OnClearCache(wxCommandEvent& event);
+    void OnSettingsPage(wxCommandEvent& event);
+    
+    void OnToggleCompact(wxCommandEvent& event);
+    void OnToggleTheme(wxCommandEvent& event);
+
+    void OnTabOverview(wxCommandEvent& event);
+    void OnCheckUpdates(wxCommandEvent& event);
+
+    wxTimer* m_timer = nullptr;
+    wxTimer* m_animTimer = nullptr;
+    int targetSidebarWidth = 240;
+    int currentSidebarWidth = 240;
+    
+    wxImage compactIconImg;
+    double currentIconAngle = 0.0;
+    double targetIconAngle = 0.0;
+    
+    void OnAnimTimer(wxTimerEvent& event);
 
     wxDECLARE_EVENT_TABLE();
 };

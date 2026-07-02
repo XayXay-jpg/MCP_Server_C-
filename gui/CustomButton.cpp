@@ -9,17 +9,22 @@ wxBEGIN_EVENT_TABLE(CustomButton, wxPanel)
     EVT_LEFT_UP(CustomButton::OnLeftUp)
     EVT_ENTER_WINDOW(CustomButton::OnMouseEnter)
     EVT_LEAVE_WINDOW(CustomButton::OnMouseLeave)
+    EVT_TIMER(wxID_ANY, CustomButton::OnAnimTimer)
 wxEND_EVENT_TABLE()
 
 CustomButton::CustomButton(wxWindow* parent, wxWindowID id, const wxString& label, const wxPoint& pos, const wxSize& size)
     : wxPanel(parent, id, pos, size, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE),
       m_label(label), m_isHovered(false), m_isPressed(false), m_isSelected(false),
-      m_indent(0), m_treeLineMode(0)
+      m_indent(0), m_treeLineMode(0), m_borderRadius(4), m_alignment(wxALIGN_LEFT)
 {
     m_bgColour = wxColour("#E8F1F2");
     m_fgColour = wxColour("#13293D");
     m_hoverColour = wxColour("#D0E3E5");
     SetBackgroundStyle(wxBG_STYLE_PAINT);
+    
+    m_animTimer = new wxTimer(this, wxID_ANY);
+    m_hoverProgress = 0.0;
+    m_selProgress = 0.0;
 }
 
 void CustomButton::SetLabel(const wxString& label) {
@@ -29,8 +34,12 @@ void CustomButton::SetLabel(const wxString& label) {
 
 bool CustomButton::SetBackgroundColour(const wxColour& colour) {
     m_bgColour = colour;
-    // Auto-generate hover color slightly lighter/darker
-    m_hoverColour = colour.ChangeLightness(110);
+    int luminance = 0.299 * colour.Red() + 0.587 * colour.Green() + 0.114 * colour.Blue();
+    if (luminance < 40) {
+        m_hoverColour = colour.ChangeLightness(150); // Dark bg -> lighter hover
+    } else {
+        m_hoverColour = colour.ChangeLightness(90); // Light bg -> darker hover
+    }
     Refresh();
     return true;
 }
@@ -46,7 +55,14 @@ void CustomButton::SetHoverColour(const wxColour& colour) {
 }
 
 void CustomButton::SetSelected(bool selected) {
+    if (m_isSelected == selected) return;
     m_isSelected = selected;
+    if (m_isSelected) {
+        m_selProgress = 0.0;
+    } else {
+        m_selProgress = 0.0;
+    }
+    m_animTimer->Start(8);
     Refresh();
 }
 
@@ -78,6 +94,16 @@ void CustomButton::SetTreeLineMode(int mode) {
     Refresh();
 }
 
+void CustomButton::SetBorderRadius(int radius) {
+    m_borderRadius = radius;
+    Refresh();
+}
+
+void CustomButton::SetAlignment(int align) {
+    m_alignment = align;
+    Refresh();
+}
+
 void CustomButton::OnPaint(wxPaintEvent& event) {
     wxPaintDC paintDC(this);
     
@@ -103,39 +129,59 @@ void CustomButton::OnPaint(wxPaintEvent& event) {
         }
     }
 
-    // Draw background
+    // Draw background with hover fade
     wxColour drawColor = m_bgColour;
     if (m_isPressed) {
-        drawColor = m_bgColour.ChangeLightness(90);
+        drawColor = m_bgColour.ChangeLightness(80);
     } else if (m_isSelected) {
-        drawColor = wxColour("#158E8A"); // Highlight color for active tab
-    } else if (m_isHovered) {
-        drawColor = m_hoverColour;
+        drawColor = wxColour("#1F1F24"); // Highlight color for active tab in SaaS style
+    } else if (m_hoverProgress > 0.0) {
+        int r = m_bgColour.Red() + (m_hoverColour.Red() - m_bgColour.Red()) * m_hoverProgress;
+        int g = m_bgColour.Green() + (m_hoverColour.Green() - m_bgColour.Green()) * m_hoverProgress;
+        int b = m_bgColour.Blue() + (m_hoverColour.Blue() - m_bgColour.Blue()) * m_hoverProgress;
+        drawColor = wxColour(r, g, b);
     }
 
-    dc.SetBrush(wxBrush(drawColor));
-    dc.SetPen(*wxTRANSPARENT_PEN);
+    // Only draw background if it's not transparent, or if it's hovered/selected
+    if (m_bgColour.Alpha() > 0 || m_hoverProgress > 0.0 || m_isSelected || m_isPressed) {
+        dc.SetBrush(wxBrush(drawColor));
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.DrawRoundedRectangle(x, 0, w, size.y, m_borderRadius);
+    }
     
-    // Draw rounded rectangle
-    dc.DrawRoundedRectangle(x, 0, w, size.y, 15.0); // 15px border radius
+    // Draw left accent bar for selected item
+    if (m_isSelected) {
+        dc.SetBrush(wxBrush(wxColour("#3B82F6"))); // Modern blue accent
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        double barHeight = size.y * 0.6 * m_selProgress;
+        double barY = (size.y - barHeight) / 2.0;
+        dc.DrawRoundedRectangle(x, barY, 4, barHeight, 2); // 4px wide, animated height
+    }
 
     // Draw text and icon
-    wxRect contentRect(x + 10, 0, w - 10, size.y); // 10px padding from left
+    wxRect contentRect(x + 16, 0, w - 32, size.y); // Added padding so it doesn't overlap accent bar
+    int alignFlags = m_alignment | wxALIGN_CENTER_VERTICAL;
+    
+    // In compact mode, the label is empty. We want the icon perfectly centered!
+    if (m_label.IsEmpty()) {
+        contentRect = wxRect(x, 0, w, size.y);
+        alignFlags = wxALIGN_CENTER; // Center horizontally and vertically
+    }
+    
     dc.SetFont(GetFont());
+    
     if (m_isSelected) {
         dc.SetTextForeground(wxColour(*wxWHITE));
-        if (m_iconSelected.IsOk()) {
-            dc.DrawLabel(m_label, m_iconSelected, contentRect, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-        } else {
-            dc.DrawLabel(m_label, contentRect, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-        }
     } else {
         dc.SetTextForeground(m_fgColour);
-        if (m_icon.IsOk()) {
-            dc.DrawLabel(m_label, m_icon, contentRect, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-        } else {
-            dc.DrawLabel(m_label, contentRect, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-        }
+    }
+    
+    if (m_isSelected && m_iconSelected.IsOk()) {
+        dc.DrawLabel(m_label, m_iconSelected, contentRect, alignFlags);
+    } else if (!m_isSelected && m_icon.IsOk()) {
+        dc.DrawLabel(m_label, m_icon, contentRect, alignFlags);
+    } else {
+        dc.DrawLabel(m_label, contentRect, alignFlags);
     }
 }
 
@@ -160,13 +206,40 @@ void CustomButton::OnLeftUp(wxMouseEvent& event) {
 
 void CustomButton::OnMouseEnter(wxMouseEvent& event) {
     m_isHovered = true;
-    Refresh();
+    m_animTimer->Start(8);
     event.Skip();
 }
 
 void CustomButton::OnMouseLeave(wxMouseEvent& event) {
     m_isHovered = false;
     m_isPressed = false;
-    Refresh();
+    m_animTimer->Start(8);
     event.Skip();
+}
+
+void CustomButton::OnAnimTimer(wxTimerEvent& event) {
+    bool needsRefresh = false;
+    
+    if (m_isHovered && m_hoverProgress < 1.0) {
+        m_hoverProgress += 0.04;
+        if (m_hoverProgress > 1.0) m_hoverProgress = 1.0;
+        needsRefresh = true;
+    } else if (!m_isHovered && m_hoverProgress > 0.0) {
+        m_hoverProgress -= 0.04;
+        if (m_hoverProgress < 0.0) m_hoverProgress = 0.0;
+        needsRefresh = true;
+    }
+    
+    if (m_isSelected && m_selProgress < 1.0) {
+        m_selProgress += 0.04; // Smooth spring-like growth
+        if (m_selProgress > 1.0) m_selProgress = 1.0;
+        needsRefresh = true;
+    }
+    
+    if (needsRefresh) {
+        Refresh();
+        Update();
+    } else {
+        m_animTimer->Stop();
+    }
 }

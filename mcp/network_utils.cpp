@@ -58,13 +58,30 @@ std::vector<TokenInfo> NetworkUtils::LoadTokens() {
     try {
         json j = json::parse(f);
         for (const auto& item : j) {
-            tokens.push_back({
-                item.value("id", ""),
-                item.value("name", "New Token"),
-                item.value("raw_token", ""),
-                item.value("creation_date", ""),
-                item.value("active", false)
-            });
+            TokenInfo t;
+            t.id = item.value("id", "");
+            t.name = item.value("name", "New Token");
+            t.raw_token = item.value("raw_token", "");
+            t.creation_date = item.value("creation_date", "");
+            t.active = item.value("active", false);
+            if (item.contains("permissions")) {
+                if (item["permissions"].contains("servers") && item["permissions"]["servers"].is_object()) {
+                    for (auto& [server_id, tools_val] : item["permissions"]["servers"].items()) {
+                        if (tools_val.is_array()) {
+                            t.permissions.allowed_servers[server_id] = tools_val.get<std::vector<std::string>>();
+                        }
+                    }
+                }
+                if (item["permissions"].contains("server_workspaces") && item["permissions"]["server_workspaces"].is_object()) {
+                    for (auto& [server_id, ws_val] : item["permissions"]["server_workspaces"].items()) {
+                        if (ws_val.is_string()) {
+                            t.permissions.server_workspaces[server_id] = ws_val.get<std::string>();
+                        }
+                    }
+                }
+                t.permissions.allowed_tasks = item["permissions"].value("allowed_tasks", std::vector<std::string>{});
+            }
+            tokens.push_back(t);
         }
     } catch (...) {
         // Ignore parsing errors and return empty/partial
@@ -80,7 +97,12 @@ void NetworkUtils::SaveTokens(const std::vector<TokenInfo>& tokens) {
             {"name", t.name},
             {"raw_token", t.raw_token},
             {"creation_date", t.creation_date},
-            {"active", t.active}
+            {"active", t.active},
+            {"permissions", {
+                {"servers", t.permissions.allowed_servers},
+                {"server_workspaces", t.permissions.server_workspaces},
+                {"allowed_tasks", t.permissions.allowed_tasks}
+            }}
         });
     }
     std::ofstream f("tokens.json");

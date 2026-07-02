@@ -18,6 +18,10 @@
 #include "utils.h"
 #include "tools.h"
 #include "network_utils.h"
+#include "settings_manager.h"
+#include "cluster_manager.h"
+#include "crypto_utils.h"
+#include "cluster_manager.h"
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
@@ -155,12 +159,28 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
             }
 
             bool token_valid = false;
-            if (!token_provided.empty()) {
-                auto tokens = NetworkUtils::LoadTokens();
-                for (const auto& t : tokens) {
-                    if (t.active && t.raw_token == token_provided) {
-                        token_valid = true;
-                        break;
+            
+            if (req.path == "/cluster/join" || req.path == "/cluster/configure") {
+                token_valid = true;
+            } else if (!token_provided.empty()) {
+                auto& sm = SettingsManager::Get();
+                if (sm.appMode.find("Child") != std::string::npos && token_provided == sm.parentMasterToken && !sm.parentMasterToken.empty()) {
+                    if (req.has_header("X-MCP-Signature")) {
+                        std::string sig = req.get_header_value("X-MCP-Signature");
+                        std::string expected_sig = generate_hmac_sha256(sm.parentEncryptionKey, req.body);
+                        if (sig == expected_sig) {
+                            token_valid = true;
+                        }
+                    }
+                }
+                
+                if (!token_valid) {
+                    auto tokens = NetworkUtils::LoadTokens();
+                    for (const auto& t : tokens) {
+                        if (t.active && t.raw_token == token_provided) {
+                            token_valid = true;
+                            break;
+                        }
                     }
                 }
             }
@@ -209,7 +229,31 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
             g_active_sessions = active_sessions.size();
         }
 
-        mcp_log("[Info] New SSE connection. SessionID: " + session_id);
+        std::string token_provided = "";
+        if (req.has_header("Authorization")) {
+            std::string auth_header = req.get_header_value("Authorization");
+            if (auth_header.rfind("Bearer ", 0) == 0) token_provided = auth_header.substr(7);
+        }
+        if (token_provided.empty() && req.has_param("token")) token_provided = req.get_param_value("token");
+        
+        std::string token_display = "None";
+        if (!token_provided.empty()) {
+            auto tokens = NetworkUtils::LoadTokens();
+            for (const auto& t : tokens) {
+                if (t.raw_token == token_provided) {
+                    token_display = t.name.empty() ? t.id : t.name;
+                    std::string masked = t.raw_token.length() > 8 ? 
+                        (t.raw_token.substr(0, 4) + "..." + t.raw_token.substr(t.raw_token.length() - 4)) : "***";
+                    token_display += " [" + masked + "]";
+                    break;
+                }
+            }
+        }
+
+        mcp_log("[Info] New SSE connection. SessionID: " + session_id + " | Token: " + token_display);
+        if (g_notify_callback) {
+            g_notify_callback("New Connection (SSE)", "Token: " + token_display);
+        }
 
         res.set_chunked_content_provider(
             "text/event-stream",
@@ -278,6 +322,43 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
             is_direct_post = true; // Open WebUI sends POST without sessionId directly!
         }
 
+        // Extract and log token and payload
+        std::string token_provided = "";
+        if (req.has_header("Authorization")) {
+            std::string auth_header = req.get_header_value("Authorization");
+            if (auth_header.rfind("Bearer ", 0) == 0) {
+                token_provided = auth_header.substr(7);
+            }
+        }
+        if (token_provided.empty() && req.has_param("token")) {
+            token_provided = req.get_param_value("token");
+        }
+        
+        std::string token_display = "None";
+        TokenInfo current_token;
+        bool has_token = false;
+        
+        if (!token_provided.empty()) {
+            auto tokens = NetworkUtils::LoadTokens();
+            for (const auto& t : tokens) {
+                if (t.raw_token == token_provided) {
+                    current_token = t;
+                    has_token = true;
+                    token_display = t.name.empty() ? t.id : t.name;
+                    std::string masked = t.raw_token.length() > 8 ? 
+                        (t.raw_token.substr(0, 4) + "..." + t.raw_token.substr(t.raw_token.length() - 4)) : "***";
+                    token_display += " [" + masked + "]";
+                    break;
+                }
+            }
+        }
+
+        mcp_log("[Info] POST Request from Token: " + token_display);
+        mcp_log("[Info] Raw Payload: " + req.body);
+        if (is_direct_post && g_notify_callback) {
+            g_notify_callback("New Connection (POST)", "Token: " + token_display);
+        }
+
         try {
             json request = json::parse(req.body);
             json result;
@@ -291,7 +372,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                 } else if (method == "tools/list") {
                     result = handle_tools_list(request);
                 } else if (method == "tools/call") {
-                    result = handle_tools_call(request);
+                    result = handle_tools_call(request, current_token);
                 } else if (method == "notifications/initialized" || method == "ping") {
                     if (request.contains("id")) {
                         result = {
@@ -349,9 +430,63 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
             }
         }
     };
+    
+    svr.Post("/cluster/join", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            json data = json::parse(req.body);
+            std::string id = data.value("id", "");
+            std::string ip = req.remote_addr + ":" + data.value("port", "8080"); 
+            std::string hostname = data.value("hostname", "Unknown");
+            std::string platform = data.value("platform", "Unknown");
+            
+            if (id.empty()) {
+                res.status = 400;
+                res.set_content("{\"error\":\"Missing id\"}", "application/json");
+                return;
+            }
+            
+            bool is_new = ClusterManager::GetInstance().RegisterNodeRequest(id, ip, hostname, platform);
+            if (is_new && g_notify_callback) {
+                g_notify_callback("Cluster Connection", "New node request from " + hostname + " (" + ip + ")");
+            }
+            
+            res.status = 200;
+            res.set_content("{\"status\":\"pending\"}", "application/json");
+            
+        } catch (...) {
+            res.status = 400;
+        }
+    });
+
+    svr.Post("/cluster/configure", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            json data = json::parse(req.body);
+            auto& sm = SettingsManager::Get();
+            if (sm.appMode.find("Child") != std::string::npos) {
+                if (sm.parentMasterToken.empty() || sm.parentMasterToken == data.value("master_token", "")) {
+                    sm.parentMasterToken = data.value("master_token", "");
+                    sm.parentEncryptionKey = data.value("encryption_key", "");
+                    sm.Save();
+                    mcp_log("[Info] Node successfully configured by Parent.");
+                    if (g_notify_callback) g_notify_callback("Cluster Configuration", "Received configuration from Parent node.");
+                    res.status = 200;
+                    res.set_content("{\"status\":\"ok\"}", "application/json");
+                    return;
+                } else {
+                    res.status = 403;
+                    res.set_content("{\"error\":\"Already configured with a different parent\"}", "application/json");
+                    return;
+                }
+            }
+            res.status = 400;
+        } catch (...) {
+            res.status = 400;
+        }
+    });
 
     svr.Post("/message", post_handler);
     svr.Post("/sse", post_handler);
+    svr.Post("/mcp", post_handler);
 
     mcp_log("[Info] Server started.\n");
     mcp_log("[Info] Sandbox Directory: " + BASE_DIR.string());

@@ -5,11 +5,15 @@
 #include <httplib.h>
 #include <cstdlib>
 
+#include "settings_manager.h"
+#include "cluster_manager.h"
+#include "crypto_utils.h"
+
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
-json get_available_tools() {
-    return json::array({
+json get_all_tools() {
+    json tools = json::array({
         {
             {"name", "list_directory"},
             {"description", "List files and directories in the given path"},
@@ -89,9 +93,32 @@ json get_available_tools() {
             }}
         }
     });
+    
+    for (auto& tool : tools) {
+        tool["inputSchema"]["properties"]["target_server_id"] = {
+            {"type", "string"},
+            {"description", "Optional ID of the target child server to execute this tool on. If omitted, executes on the local parent server."}
+        };
+    }
+    
+    return tools;
 }
 
-json tool_take_screenshot(const json& id, const json& arguments) {
+json get_available_tools() {
+    json all = get_all_tools();
+    json filtered = json::array();
+    auto& disabled = SettingsManager::Get().disabled_tools;
+    
+    for (const auto& tool : all) {
+        std::string name = tool["name"];
+        if (std::find(disabled.begin(), disabled.end(), name) == disabled.end()) {
+            filtered.push_back(tool);
+        }
+    }
+    return filtered;
+}
+
+json tool_take_screenshot(const json& id, const json& arguments, const std::filesystem::path& base_dir) {
     fs::path temp_dir = fs::temp_directory_path();
     fs::path file_path = temp_dir / "mcp_screenshot.png";
     std::string path_str = file_path.string();
@@ -134,12 +161,12 @@ json tool_take_screenshot(const json& id, const json& arguments) {
     };
 }
 
-json tool_list_directory(const json& id, const json& arguments) {
+json tool_list_directory(const json& id, const json& arguments, const std::filesystem::path& base_dir) {
     if (!arguments.contains("path") || !arguments["path"].is_string()) {
         return make_error(id, -32602, "Invalid or missing 'path' argument");
     }
     
-    auto safe_path = validate_path(arguments["path"].get<std::string>());
+    auto safe_path = validate_path(arguments["path"].get<std::string>(), base_dir);
     if (!safe_path) {
         return make_error(id, -32000, "Access denied: Path is outside the sandbox");
     }
@@ -173,12 +200,12 @@ json tool_list_directory(const json& id, const json& arguments) {
     }
 }
 
-json tool_read_file(const json& id, const json& arguments) {
+json tool_read_file(const json& id, const json& arguments, const std::filesystem::path& base_dir) {
     if (!arguments.contains("path") || !arguments["path"].is_string()) {
         return make_error(id, -32602, "Invalid or missing 'path' argument");
     }
     
-    auto safe_path = validate_path(arguments["path"].get<std::string>());
+    auto safe_path = validate_path(arguments["path"].get<std::string>(), base_dir);
     if (!safe_path) {
         return make_error(id, -32000, "Access denied: Path is outside the sandbox");
     }
@@ -207,13 +234,13 @@ json tool_read_file(const json& id, const json& arguments) {
     }
 }
 
-json tool_write_file(const json& id, const json& arguments) {
+json tool_write_file(const json& id, const json& arguments, const std::filesystem::path& base_dir) {
     if (!arguments.contains("path") || !arguments["path"].is_string() || 
         !arguments.contains("content") || !arguments["content"].is_string()) {
         return make_error(id, -32602, "Invalid or missing 'path' or 'content' argument");
     }
     
-    auto safe_path = validate_path(arguments["path"].get<std::string>());
+    auto safe_path = validate_path(arguments["path"].get<std::string>(), base_dir);
     if (!safe_path) {
         return make_error(id, -32000, "Access denied: Path is outside the sandbox");
     }
@@ -246,12 +273,12 @@ json tool_write_file(const json& id, const json& arguments) {
     }
 }
 
-json tool_start_script(const json& id, const json& arguments) {
+json tool_start_script(const json& id, const json& arguments, const std::filesystem::path& base_dir) {
     if (!arguments.contains("path") || !arguments["path"].is_string()) {
         return make_error(id, -32602, "Invalid or missing 'path' argument");
     }
     
-    auto safe_path = validate_path(arguments["path"].get<std::string>());
+    auto safe_path = validate_path(arguments["path"].get<std::string>(), base_dir);
     if (!safe_path) {
         return make_error(id, -32000, "Access denied: Path is outside the sandbox");
     }
@@ -259,7 +286,7 @@ json tool_start_script(const json& id, const json& arguments) {
         return make_error(id, -32000, "Script or executable does not exist");
     }
 
-    std::string cmd = "cd \"" + BASE_DIR.string() + "\" && chmod +x \"" + safe_path->string() + "\" && \"" + safe_path->string() + "\"";
+    std::string cmd = "cd \"" + base_dir.string() + "\" && chmod +x \"" + safe_path->string() + "\" && \"" + safe_path->string() + "\"";
     
     if (arguments.contains("args") && arguments["args"].is_array()) {
         for (const auto& arg : arguments["args"]) {
@@ -310,7 +337,7 @@ json tool_start_script(const json& id, const json& arguments) {
     }
 }
 
-json tool_search_files(const json& id, const json& arguments) {
+json tool_search_files(const json& id, const json& arguments, const std::filesystem::path& base_dir) {
     if (!arguments.contains("query") || !arguments["query"].is_string()) {
         return make_error(id, -32602, "Invalid or missing 'query' argument");
     }
@@ -318,10 +345,10 @@ json tool_search_files(const json& id, const json& arguments) {
     
     try {
         json results = json::array();
-        for (const auto& entry : fs::recursive_directory_iterator(BASE_DIR)) {
+        for (const auto& entry : fs::recursive_directory_iterator(base_dir)) {
             std::string filename = entry.path().filename().string();
             if (filename.find(query) != std::string::npos) {
-                std::string rel_path = fs::relative(entry.path(), BASE_DIR).string();
+                std::string rel_path = fs::relative(entry.path(), base_dir).string();
                 results.push_back({
                     {"path", rel_path},
                     {"is_directory", entry.is_directory()}
@@ -345,13 +372,13 @@ json tool_search_files(const json& id, const json& arguments) {
         return make_error(id, -32000, "Internal error searching files");
     }
 }
-json tool_execute_command(const json& id, const json& arguments) {
+json tool_execute_command(const json& id, const json& arguments, const std::filesystem::path& base_dir) {
     if (!arguments.contains("command") || !arguments["command"].is_string()) {
         return make_error(id, -32602, "Invalid or missing 'command' argument");
     }
     
     std::string command = arguments["command"].get<std::string>();
-    std::string cmd = "cd \"" + BASE_DIR.string() + "\" && " + command + " 2>&1";
+    std::string cmd = "cd \"" + base_dir.string() + "\" && " + command + " 2>&1";
     std::string output;
     
     try {
@@ -382,7 +409,7 @@ json tool_execute_command(const json& id, const json& arguments) {
     }
 }
 
-json handle_tools_call(const json& request) {
+json handle_tools_call(const json& request, const TokenInfo& token) {
     auto id = request.value("id", json(nullptr));
     if (!request.contains("params") || !request["params"].contains("name")) {
         return make_error(id, -32602, "Missing tool name in params");
@@ -390,24 +417,78 @@ json handle_tools_call(const json& request) {
     
     std::string name = request["params"]["name"];
     json arguments = request["params"].value("arguments", json::object());
+    std::string target_server = arguments.value("target_server_id", "local");
     
-    mcp_log("[Tool] Executing: " + name);
+    mcp_log("[Tool] Executing: " + name + " on server: " + target_server);
     g_tool_calls++;
     
+    // RBAC Check
+    if (!token.permissions.has_tool_access(target_server, name)) {
+        return make_error(id, -32000, "Access Denied: You do not have permission to use tool '" + name + "' on server '" + target_server + "'");
+    }
+    
+    if (target_server != "local") {
+        ClusterNode targetNode;
+        if (!ClusterManager::GetInstance().GetNode(target_server, targetNode) || targetNode.status != "connected") {
+            return make_error(id, -32000, "Target node not found or not connected");
+        }
+        
+        mcp_log("[Proxy] Forwarding request to child node: " + targetNode.ip_address);
+        
+        // Prepare request body
+        std::string req_body = request.dump();
+        
+        // Generate HMAC signature
+        std::string signature = generate_hmac_sha256(targetNode.encryption_key, req_body);
+        
+        // Parse IP address to get host and port
+        std::string ip = targetNode.ip_address;
+        if (ip.find("http://") == 0) ip = ip.substr(7);
+        if (ip.find("https://") == 0) ip = ip.substr(8);
+        
+        httplib::Client cli("http://" + ip); // Assuming HTTP for now. For production, HTTPS is recommended.
+        cli.set_connection_timeout(5, 0);
+        cli.set_read_timeout(30, 0); // Some tools take time
+        
+        httplib::Headers headers = {
+            {"Authorization", "Bearer " + targetNode.master_token},
+            {"X-MCP-Signature", signature},
+            {"Content-Type", "application/json"}
+        };
+        
+        auto res = cli.Post("/mcp", headers, req_body, "application/json");
+        if (res && res->status == 200) {
+            try {
+                return json::parse(res->body);
+            } catch (const std::exception& e) {
+                return make_error(id, -32000, "Failed to parse JSON response from target node: " + std::string(e.what()));
+            }
+        } else {
+            std::string err_msg = "Failed to communicate with target node. HTTP Status: " + (res ? std::to_string(res->status) : "Connection Error");
+            return make_error(id, -32000, err_msg);
+        }
+    }
+    
+    fs::path base_dir = BASE_DIR;
+    auto it = token.permissions.server_workspaces.find("local");
+    if (it != token.permissions.server_workspaces.end() && !it->second.empty()) {
+        base_dir = it->second;
+    }
+    
     if (name == "list_directory") {
-        return tool_list_directory(id, arguments);
+        return tool_list_directory(id, arguments, base_dir);
     } else if (name == "read_file") {
-        return tool_read_file(id, arguments);
+        return tool_read_file(id, arguments, base_dir);
     } else if (name == "write_file") {
-        return tool_write_file(id, arguments);
+        return tool_write_file(id, arguments, base_dir);
     } else if (name == "start_script") {
-        return tool_start_script(id, arguments);
+        return tool_start_script(id, arguments, base_dir);
     } else if (name == "search_files") {
-        return tool_search_files(id, arguments);
+        return tool_search_files(id, arguments, base_dir);
     } else if (name == "execute_command") {
-        return tool_execute_command(id, arguments);
+        return tool_execute_command(id, arguments, base_dir);
     } else if (name == "take_screenshot") {
-        return tool_take_screenshot(id, arguments);
+        return tool_take_screenshot(id, arguments, base_dir);
     } else {
         return make_error(id, -32601, "Tool not found");
     }

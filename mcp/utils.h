@@ -8,6 +8,7 @@
 
 // Global logger callback
 extern std::function<void(const std::string&)> g_log_callback;
+extern std::function<void(const std::string&, const std::string&)> g_notify_callback;
 void mcp_log(const std::string& message);
 
 // Глобальное состояние
@@ -19,4 +20,4 @@ extern std::atomic<int> g_tool_calls;
 nlohmann::json make_error(const nlohmann::json& id, int code, const std::string& message);
 
 // Безопасность: Валидация пути для предотвращения Path Traversal
-std::optional<std::filesystem::path> validate_path(const std::string& user_path);
+std::optional<std::filesystem::path> validate_path(const std::string& user_path, const std::filesystem::path& base_dir = BASE_DIR);

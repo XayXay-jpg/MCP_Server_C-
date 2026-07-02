@@ -114,8 +114,8 @@ MCP_Server_C-/
 ├── gui/
 │   ├── windows.cpp       # Main application window
 │   ├── CustomButton.cpp  # Styled wxButton subclass
-│   ├── LanguageManager.h # Runtime i18n (EN/RU)
-│   └── icons/            # Application icons
+│   └── LanguageManager.h # Runtime i18n (EN/RU)
+├── icons/                # Application icons
 ├── CMakeLists.txt
 └── README.md
 ```
@@ -220,8 +220,8 @@ MCP_Server_C-/
 ├── gui/
 │   ├── windows.cpp       # Главное окно приложения
 │   ├── CustomButton.cpp  # Стилизованный подкласс wxButton
-│   ├── LanguageManager.h # Локализация (RU/EN)
-│   └── icons/            # Иконки приложения
+│   └── LanguageManager.h # Локализация (RU/EN)
+├── icons/                # Иконки приложения
 ├── CMakeLists.txt
 └── README.md
 ```

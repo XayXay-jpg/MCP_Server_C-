@@ -3,7 +3,7 @@
 
 bool soft::OnInit() {
     wxInitAllImageHandlers();
-    Windows *windows = new Windows(wxT("Windows"));
+    Windows *windows = new Windows(wxT("MCP Server Manager"));
     windows -> Show(true); return true;
 }
 

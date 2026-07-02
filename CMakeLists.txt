@@ -19,6 +19,8 @@ include(${wxWidgets_USE_FILE})
 file(GLOB MCP_SOURCES "mcp/*.cpp")
 file(GLOB GUI_SOURCES "gui/*.cpp")
 
+find_package(OpenSSL REQUIRED)
+
 add_executable(mcp_manager main_gui.cpp ${MCP_SOURCES} ${GUI_SOURCES})
 
 target_include_directories(mcp_manager PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -26,5 +28,7 @@ target_link_libraries(mcp_manager PRIVATE
     nlohmann_json::nlohmann_json 
     httplib::httplib
     Threads::Threads
+    OpenSSL::SSL
+    OpenSSL::Crypto
     ${wxWidgets_LIBRARIES}
 )
