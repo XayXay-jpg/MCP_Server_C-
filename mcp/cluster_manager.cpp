@@ -139,7 +139,11 @@ bool ClusterManager::ApproveNode(const std::string& id) {
     if (ip.find("https://") == 0) ip = ip.substr(8);
     while (!ip.empty() && ip.back() == '/') ip.pop_back();
     
-    mcp_log("[Info] ApproveNode: Connecting to child '" + id + "' at http://" + ip);
+    if (id == "parent") {
+        mcp_log("[Info] ApproveNode: Connecting to parent at http://" + ip);
+    } else {
+        mcp_log("[Info] ApproveNode: Connecting to child '" + id + "' at http://" + ip);
+    }
     
     std::thread([id, ip, mt, ek]() {
         std::string host = ip;
