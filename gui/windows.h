@@ -266,6 +266,7 @@ private:
 
     void OnTabOverview(wxCommandEvent& event);
     void OnCheckUpdates(wxCommandEvent& event);
+    void OnComboServerStats(wxCommandEvent& event);
 
     wxTimer* m_timer = nullptr;
     wxTimer* m_animTimer = nullptr;

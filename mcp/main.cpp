@@ -2,6 +2,7 @@
 #include <string>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <csignal>
 #include <optional>
 #include <mutex>
@@ -11,6 +12,15 @@
 #include <map>
 #include <cstdlib>
 #include <ctime>
+#if defined(__linux__) || defined(__APPLE__)
+#include <sys/statvfs.h>
+#endif
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#include <mach/processor_info.h>
+#include <mach/mach_host.h>
+#include <sys/sysctl.h>
+#endif
 
 #include <nlohmann/json.hpp>
 #include <httplib.h>
@@ -696,6 +706,119 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
     svr.Post("/message", post_handler);
     svr.Post("/sse", post_handler);
     svr.Post("/mcp", post_handler);
+
+    // /cluster/stats — returns system resource usage for this node (used by parent GUI)
+    svr.Get("/cluster/stats", [](const httplib::Request&, httplib::Response& res) {
+        res.set_header("Access-Control-Allow-Origin", "*");
+        res.set_header("Content-Type", "application/json");
+
+        // Platform-specific resource collection (same logic as sys_stats.cpp)
+        double cpuPercent = 0.0;
+        double ramUsedGB = 0.0, ramTotalGB = 0.0, ramPercent = 0.0;
+        double diskUsedGB = 0.0, diskTotalGB = 0.0, diskPercent = 0.0;
+
+#if defined(__linux__)
+        // CPU via /proc/stat
+        {
+            static unsigned long long prevTotal = 0, prevIdle = 0;
+            std::ifstream f("/proc/stat");
+            std::string line;
+            if (f.is_open() && std::getline(f, line) && line.compare(0, 3, "cpu") == 0) {
+                std::istringstream ss(line);
+                std::string lbl;
+                unsigned long long u, n, s, id, io, irq, sirq;
+                ss >> lbl >> u >> n >> s >> id >> io >> irq >> sirq;
+                unsigned long long total = u + n + s + id + io + irq + sirq;
+                unsigned long long idle  = id;
+                if (prevTotal) {
+                    unsigned long long dt = total - prevTotal;
+                    unsigned long long di = idle - prevIdle;
+                    if (dt) cpuPercent = (double)(dt - di) / dt * 100.0;
+                }
+                prevTotal = total; prevIdle = idle;
+            }
+        }
+        // RAM via /proc/meminfo
+        {
+            std::ifstream f("/proc/meminfo");
+            std::string line;
+            unsigned long long memTotal = 0, memFree = 0, buffers = 0, cached = 0, srec = 0, shmem = 0;
+            while (std::getline(f, line)) {
+                std::istringstream ss(line);
+                std::string k; unsigned long long v; std::string u;
+                ss >> k >> v >> u;
+                if (k == "MemTotal:") memTotal = v;
+                else if (k == "MemFree:") memFree = v;
+                else if (k == "Buffers:") buffers = v;
+                else if (k == "Cached:") cached = v;
+                else if (k == "SReclaimable:") srec = v;
+                else if (k == "Shmem:") shmem = v;
+            }
+            if (memTotal > 0) {
+                unsigned long long avail = memFree + buffers + cached + srec - shmem;
+                unsigned long long used = memTotal - avail;
+                ramTotalGB = memTotal / (1024.0 * 1024.0);
+                ramUsedGB  = used    / (1024.0 * 1024.0);
+                ramPercent = ramUsedGB / ramTotalGB * 100.0;
+            }
+        }
+#elif defined(__APPLE__)
+        // CPU
+        {
+            static uint64_t prevTotal = 0, prevIdle = 0;
+            natural_t cpuCnt = 0; processor_info_array_t cpuInfo = nullptr; mach_msg_type_number_t cpuInfoCnt = 0;
+            if (host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpuCnt, &cpuInfo, &cpuInfoCnt) == KERN_SUCCESS) {
+                uint64_t tu=0,ts=0,ti=0,tn=0;
+                processor_cpu_load_info_t ld = (processor_cpu_load_info_t)cpuInfo;
+                for (natural_t i=0;i<cpuCnt;++i){
+                    tu+=ld[i].cpu_ticks[CPU_STATE_USER]; ts+=ld[i].cpu_ticks[CPU_STATE_SYSTEM];
+                    ti+=ld[i].cpu_ticks[CPU_STATE_IDLE]; tn+=ld[i].cpu_ticks[CPU_STATE_NICE];
+                }
+                uint64_t total=tu+ts+ti+tn, idle=ti;
+                if (prevTotal) { uint64_t dt=total-prevTotal, di=idle-prevIdle; if(dt) cpuPercent=(double)(dt-di)/dt*100.0; }
+                prevTotal=total; prevIdle=idle;
+                vm_deallocate(mach_task_self(),(vm_address_t)cpuInfo,cpuInfoCnt*sizeof(integer_t));
+            }
+        }
+        // RAM
+        {
+            vm_statistics64_data_t vm; mach_msg_type_number_t cnt=HOST_VM_INFO64_COUNT;
+            if (host_statistics64(mach_host_self(),HOST_VM_INFO64,(host_info64_t)&vm,&cnt)==KERN_SUCCESS){
+                uint64_t pg=0; size_t pl=sizeof(pg); sysctlbyname("hw.pagesize",&pg,&pl,nullptr,0); if(!pg)pg=4096;
+                uint64_t total=0; size_t tl=sizeof(total); sysctlbyname("hw.memsize",&total,&tl,nullptr,0);
+                uint64_t used=((uint64_t)vm.active_count+(uint64_t)vm.wire_count)*pg;
+                ramTotalGB=total/(1024.0*1024.0*1024.0); ramUsedGB=used/(1024.0*1024.0*1024.0);
+                if(total>0) ramPercent=ramUsedGB/ramTotalGB*100.0;
+            }
+        }
+#endif
+        // Disk (cross-platform via statvfs)
+        {
+#if defined(__linux__) || defined(__APPLE__)
+            struct statvfs buf;
+            if (statvfs("/", &buf) == 0) {
+                uint64_t total=(uint64_t)buf.f_blocks*buf.f_frsize;
+                uint64_t free =(uint64_t)buf.f_bavail*buf.f_frsize;
+                uint64_t used =total-free;
+                diskTotalGB=total/(1024.0*1024.0*1024.0);
+                diskUsedGB =used /(1024.0*1024.0*1024.0);
+                if(total>0) diskPercent=diskUsedGB/diskTotalGB*100.0;
+            }
+#endif
+        }
+
+        json resp = {
+            {"cpu_percent",  cpuPercent},
+            {"ram_used_gb",  ramUsedGB},
+            {"ram_total_gb", ramTotalGB},
+            {"ram_percent",  ramPercent},
+            {"disk_used_gb", diskUsedGB},
+            {"disk_total_gb",diskTotalGB},
+            {"disk_percent", diskPercent}
+        };
+        res.status = 200;
+        res.set_content(resp.dump(), "application/json");
+    });
 
     mcp_log("[Info] Server started.\n");
     mcp_log("[Info] Sandbox Directory: " + BASE_DIR.string());

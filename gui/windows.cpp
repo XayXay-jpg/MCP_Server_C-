@@ -174,7 +174,8 @@ enum {
     ID_BTN_RECONNECT_NODE,
     ID_BTN_TOGGLE_COMPACT,
     ID_BTN_TOGGLE_THEME,
-    ID_ANIM_TIMER
+    ID_ANIM_TIMER,
+    ID_COMBO_SERVER_STATS
 };
 
 Windows::Windows(const wxString& title) : wxFrame(NULL, wxID_ANY, title, wxDefaultPosition, wxSize(1000, 750)), isServerRunning(false), uptimeSeconds(0) {
@@ -451,7 +452,7 @@ void Windows::SetupUI() {
     lblStatsTitle->SetFont(wxFontInfo(11).Bold());
     lblStatsTitle->SetForegroundColour(wxColour("#A1A1AA"));
     
-    comboServerStats = new wxComboBox(pageOverview, wxID_ANY, lang.GetString("LOCAL_SERVER_COMBO"), wxDefaultPosition, wxSize(200, -1), 0, NULL, wxCB_READONLY | wxCB_DROPDOWN);
+    comboServerStats = new wxComboBox(pageOverview, ID_COMBO_SERVER_STATS, lang.GetString("LOCAL_SERVER_COMBO"), wxDefaultPosition, wxSize(200, -1), 0, NULL, wxCB_READONLY | wxCB_DROPDOWN);
     comboServerStats->Append(lang.GetString("LOCAL_SERVER_COMBO"));
     comboServerStats->SetSelection(0);
     
@@ -1255,9 +1256,9 @@ void Windows::UpdateLanguage() {
     btnTools->SetLabel(compact ? "" : lang.GetString("TOOLS"));
     btnGlobalSettings->SetLabel(compact ? "" : lang.GetString("GLOBAL_SETTINGS"));
     
-    btnTabOverview->SetLabel(lang.GetString("OVERVIEW"));
-    btnTabConnections->SetLabel(lang.GetString("CONNECTIONS"));
-    btnTabLogs->SetLabel(lang.GetString("LOGS"));
+    btnTabOverview->SetLabel(lang.GetString("TAB_OVERVIEW"));
+    btnTabConnections->SetLabel(lang.GetString("TAB_CONNECTIONS"));
+    btnTabLogs->SetLabel(lang.GetString("TAB_LOGS"));
 
     lblManager->SetLabel(lang.GetString("SERVER_MANAGER"));
     lblStatus->SetLabel(lang.GetString("STATUS"));
@@ -1458,6 +1459,24 @@ void Windows::RefreshNodesList() {
     if (topoPanel) {
         topoPanel->RefreshTopology();
     }
+    // Refresh the server selector combo in the Overview tab
+    if (comboServerStats) {
+        auto& lang = LanguageManager::Get();
+        int prevSel = comboServerStats->GetSelection();
+        wxString prevVal = comboServerStats->GetValue();
+        comboServerStats->Clear();
+        comboServerStats->Append(lang.GetString("LOCAL_SERVER_COMBO"));
+        auto nodes = ClusterManager::GetInstance().GetNodes();
+        for (const auto& n : nodes) {
+            if (n.status == "connected") {
+                wxString label = wxString::FromUTF8(n.hostname.empty() ? n.id.c_str() : n.hostname.c_str());
+                comboServerStats->Append(label, new wxStringClientData(wxString::FromUTF8(n.ip_address.c_str())));
+            }
+        }
+        // Try to restore previous selection
+        int newIdx = comboServerStats->FindString(prevVal);
+        comboServerStats->SetSelection(newIdx != wxNOT_FOUND ? newIdx : 0);
+    }
 }
 
 void Windows::OnTabOverview(wxCommandEvent& event) {
@@ -1544,6 +1563,11 @@ void Windows::OnServerLog(wxThreadEvent& event) {
     txtLogs->AppendText(event.GetString() + "\n");
 }
 
+void Windows::OnComboServerStats(wxCommandEvent& event) {
+    // Selection changed — stats will update on next timer tick
+    (void)event;
+}
+
 void Windows::OnTimer(wxTimerEvent& event) {
     auto& lang = LanguageManager::Get();
     if (isServerRunning) {
@@ -1554,7 +1578,68 @@ void Windows::OnTimer(wxTimerEvent& event) {
     }
     
     if (sysStatsPanel && sysStatsPanel->IsShownOnScreen()) {
-        SystemStats stats = GetSystemStats();
+        SystemStats stats;
+        bool isRemote = false;
+        
+        // Check if a remote node is selected
+        if (comboServerStats && comboServerStats->GetSelection() > 0) {
+            wxStringClientData* data = dynamic_cast<wxStringClientData*>(
+                comboServerStats->GetClientObject(comboServerStats->GetSelection()));
+            if (data) {
+                isRemote = true;
+                std::string ip = data->GetData().ToStdString();
+                // Strip port from ip if present
+                std::string host = ip;
+                int port = 3000;
+                size_t colon = host.find_last_of(':');
+                if (colon != std::string::npos) {
+                    try { port = std::stoi(host.substr(colon + 1)); } catch (...) {}
+                    host = host.substr(0, colon);
+                }
+                // Fetch /cluster/stats from the remote node in a non-blocking way
+                // We store a future and check it each tick
+                static std::future<SystemStats> remoteFuture;
+                static std::string lastIp;
+                static SystemStats lastRemoteStats = {};
+                
+                if (lastIp != ip || !remoteFuture.valid() ||
+                    remoteFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
+                    if (remoteFuture.valid() &&
+                        remoteFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
+                        lastRemoteStats = remoteFuture.get();
+                    }
+                    lastIp = ip;
+                    std::string captHost = host;
+                    int captPort = port;
+                    remoteFuture = std::async(std::launch::async, [captHost, captPort]() -> SystemStats {
+                        SystemStats s = {};
+                        httplib::Client cli(captHost, captPort);
+                        cli.set_connection_timeout(2, 0);
+                        cli.set_read_timeout(3, 0);
+                        if (auto res = cli.Get("/cluster/stats")) {
+                            if (res->status == 200) {
+                                try {
+                                    auto j = nlohmann::json::parse(res->body);
+                                    s.cpuPercent  = j.value("cpu_percent", 0.0);
+                                    s.ramUsedGB   = j.value("ram_used_gb", 0.0);
+                                    s.ramTotalGB  = j.value("ram_total_gb", 0.0);
+                                    s.ramPercent  = j.value("ram_percent", 0.0);
+                                    s.diskUsedGB  = j.value("disk_used_gb", 0.0);
+                                    s.diskTotalGB = j.value("disk_total_gb", 0.0);
+                                    s.diskPercent = j.value("disk_percent", 0.0);
+                                } catch (...) {}
+                            }
+                        }
+                        return s;
+                    });
+                }
+                stats = lastRemoteStats;
+            }
+        }
+        
+        if (!isRemote) {
+            stats = GetSystemStats();
+        }
         
         lblSysCpu->SetLabel(wxString::Format("%s: %.1f%%", lang.GetString("LBL_CPU").c_str(), stats.cpuPercent));
         gaugeSysCpu->SetValue(std::min((int)stats.cpuPercent, 100));
@@ -2207,6 +2292,7 @@ wxBEGIN_EVENT_TABLE(Windows, wxFrame)
     EVT_BUTTON(ID_BTN_TOGGLE_COMPACT, Windows::OnToggleCompact)
     EVT_BUTTON(ID_BTN_TOGGLE_THEME, Windows::OnToggleTheme)
     EVT_TIMER(ID_ANIM_TIMER, Windows::OnAnimTimer)
+    EVT_COMBOBOX(ID_COMBO_SERVER_STATS, Windows::OnComboServerStats)
 wxEND_EVENT_TABLE()
 
 void Windows::OnToggleCompact(wxCommandEvent& event) {

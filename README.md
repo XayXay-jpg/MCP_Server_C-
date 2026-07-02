@@ -61,29 +61,56 @@ The server implements the Model Context Protocol and provides the following tool
 ### Requirements
 
 - CMake >= 3.14
-- C++17 compiler (GCC 9+, Clang 10+)
+- C++17 compiler (GCC 9+, Clang 10+, or MSVC)
 - wxWidgets >= 3.0 (Core + Base)
+- OpenSSL (required for HTTPS/WSS and VPN bypass logic)
 - Python 3 (required only for `take_screenshot`)
 - `curl` (required for public IP detection)
 
-Install wxWidgets on Debian/Ubuntu:
+#### Linux (Debian/Ubuntu)
 ```bash
-sudo apt install libwxgtk3.2-dev
+sudo apt update
+sudo apt install build-essential cmake libwxgtk3.2-dev libssl-dev python3 curl
 ```
+
+#### macOS
+```bash
+brew install cmake wxwidgets openssl python3 curl
+```
+
+#### Windows
+1. Install [Visual Studio](https://visualstudio.microsoft.com/) with the "Desktop development with C++" workload.
+2. Install [CMake](https://cmake.org/download/).
+3. Install [vcpkg](https://vcpkg.io/) (recommended for dependencies) or download and build wxWidgets and OpenSSL manually.
+   Using vcpkg:
+   ```cmd
+   vcpkg install wxwidgets openssl
+   ```
 
 ---
 
 ### Building from Source
 
+#### Linux & macOS
 ```bash
 git clone https://github.com/XayXay-jpg/MCP_Server_C-.git
 cd MCP_Server_C-
 mkdir build && cd build
 cmake ..
-cmake --build . -j$(nproc)
+cmake --build . --parallel
 ```
 
-All C++ dependencies (`nlohmann/json`, `cpp-httplib`) are automatically fetched during the CMake configure step. No manual installation required.
+#### Windows
+```cmd
+git clone https://github.com/XayXay-jpg/MCP_Server_C-.git
+cd MCP_Server_C-
+mkdir build
+cd build
+cmake .. -DCMAKE_TOOLCHAIN_FILE=[path_to_vcpkg]/scripts/buildsystems/vcpkg.cmake
+cmake --build . --config Release --parallel
+```
+
+All other C++ dependencies (`nlohmann/json`, `cpp-httplib`) are automatically fetched during the CMake configure step. No manual installation required.
 
 ---
 
@@ -167,26 +194,53 @@ MCP Server Manager — десктопное приложение для запу
 ### Требования
 
 - CMake >= 3.14
-- Компилятор C++17 (GCC 9+, Clang 10+)
+- Компилятор C++17 (GCC 9+, Clang 10+ или MSVC)
 - wxWidgets >= 3.0 (Core + Base)
+- OpenSSL (требуется для HTTPS/WSS и обхода VPN)
 - Python 3 (только для `take_screenshot`)
 - `curl` (для определения публичного IP)
 
-Установка wxWidgets на Debian/Ubuntu:
+#### Linux (Debian/Ubuntu)
 ```bash
-sudo apt install libwxgtk3.2-dev
+sudo apt update
+sudo apt install build-essential cmake libwxgtk3.2-dev libssl-dev python3 curl
 ```
+
+#### macOS
+```bash
+brew install cmake wxwidgets openssl python3 curl
+```
+
+#### Windows
+1. Установите [Visual Studio](https://visualstudio.microsoft.com/) с компонентом "Разработка классических приложений на C++".
+2. Установите [CMake](https://cmake.org/download/).
+3. Установите [vcpkg](https://vcpkg.io/) (рекомендуется) или соберите wxWidgets и OpenSSL вручную.
+   С использованием vcpkg:
+   ```cmd
+   vcpkg install wxwidgets openssl
+   ```
 
 ---
 
 ### Сборка из исходников
 
+#### Linux & macOS
 ```bash
 git clone https://github.com/XayXay-jpg/MCP_Server_C-.git
 cd MCP_Server_C-
 mkdir build && cd build
 cmake ..
-cmake --build . -j$(nproc)
+cmake --build . --parallel
+```
+
+#### Windows
+```cmd
+git clone https://github.com/XayXay-jpg/MCP_Server_C-.git
+cd MCP_Server_C-
+mkdir build
+cd build
+cmake .. -DCMAKE_TOOLCHAIN_FILE=[путь_до_vcpkg]/scripts/buildsystems/vcpkg.cmake
+cmake --build . --config Release --parallel
 ```
 
 Зависимости C++ (`nlohmann/json`, `cpp-httplib`) загружаются автоматически при конфигурировании CMake.
