@@ -87,12 +87,12 @@ json handle_initialize(const json& request) {
     };
 }
 
-json handle_tools_list(const json& request) {
+json handle_tools_list(const json& request, const TokenInfo& token) {
     return {
         {"jsonrpc", "2.0"},
         {"id", request.value("id", json(nullptr))},
         {"result", {
-            {"tools", get_available_tools()}
+            {"tools", get_available_tools(token)}
         }}
     };
 }
@@ -370,7 +370,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                 if (method == "initialize") {
                     result = handle_initialize(request);
                 } else if (method == "tools/list") {
-                    result = handle_tools_list(request);
+                    result = handle_tools_list(request, current_token);
                 } else if (method == "tools/call") {
                     result = handle_tools_call(request, current_token);
                 } else if (method == "notifications/initialized" || method == "ping") {
@@ -464,11 +464,28 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
             auto& sm = SettingsManager::Get();
             if (sm.appMode.find("Child") != std::string::npos) {
                 if (sm.parentMasterToken.empty() || sm.parentMasterToken == data.value("master_token", "")) {
+                    std::string parent_hostname = data.value("parent_hostname", "Parent Node");
+                    std::string parent_ip = req.remote_addr;
+                    
+                    if (sm.parentMasterToken.empty() && g_confirm_callback) {
+                        bool approved = g_confirm_callback("Incoming Connection", 
+                            "Allow Parent Node '" + parent_hostname + "' (" + parent_ip + ") to control this device?");
+                        if (!approved) {
+                            res.status = 403;
+                            res.set_content("{\"error\":\"Rejected by user\"}", "application/json");
+                            return;
+                        }
+                    }
+
                     sm.parentMasterToken = data.value("master_token", "");
                     sm.parentEncryptionKey = data.value("encryption_key", "");
                     sm.Save();
                     mcp_log("[Info] Node successfully configured by Parent.");
                     if (g_notify_callback) g_notify_callback("Cluster Configuration", "Received configuration from Parent node.");
+                    
+                    ClusterManager::GetInstance().RegisterNodeRequest("parent", parent_ip, parent_hostname, "Parent Server");
+                    ClusterManager::GetInstance().SetNodeStatus("parent", "connected");
+                    if (g_refresh_cluster_callback) g_refresh_cluster_callback();
                     
                     const char* hn = std::getenv("HOSTNAME");
                     if (!hn) hn = std::getenv("COMPUTERNAME");

@@ -1,13 +1,12 @@
 #pragma once
 #include <nlohmann/json.hpp>
+#include "network_utils.h"
 
 // Возвращает список всех доступных в коде инструментов
 nlohmann::json get_all_tools();
 
 // Возвращает список включенных инструментов
-nlohmann::json get_available_tools();
-
-#include "network_utils.h"
+nlohmann::json get_available_tools(const TokenInfo& token);
 
 // Обрабатывает вызов инструмента
 nlohmann::json handle_tools_call(const nlohmann::json& request, const TokenInfo& token);

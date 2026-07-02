@@ -11,6 +11,7 @@ std::atomic<int> g_tool_calls{0};
 // Определение глобальных переменных
 std::function<void(const std::string&)> g_log_callback = nullptr;
 std::function<void(const std::string&, const std::string&)> g_notify_callback = nullptr;
+std::function<bool(const std::string&, const std::string&)> g_confirm_callback = nullptr;
 std::function<void()> g_refresh_cluster_callback = nullptr;
 
 void mcp_log(const std::string& message) {

@@ -104,16 +104,53 @@ json get_all_tools() {
     return tools;
 }
 
-json get_available_tools() {
+json get_available_tools(const TokenInfo& token) {
     json all = get_all_tools();
     json filtered = json::array();
     auto& disabled = SettingsManager::Get().disabled_tools;
     
-    for (const auto& tool : all) {
+    for (auto& tool : all) {
         std::string name = tool["name"];
-        if (std::find(disabled.begin(), disabled.end(), name) == disabled.end()) {
-            filtered.push_back(tool);
+        if (std::find(disabled.begin(), disabled.end(), name) != disabled.end()) {
+            continue;
         }
+        
+        std::vector<std::string> allowed_nodes;
+        if (token.permissions.has_tool_access("local", name)) {
+            allowed_nodes.push_back("local");
+        }
+        
+        for (const auto& node : ClusterManager::GetInstance().GetNodes()) {
+            if (node.status == "connected") {
+                if (token.permissions.has_tool_access(node.id, name)) {
+                    allowed_nodes.push_back(node.id);
+                }
+            }
+        }
+        
+        if (allowed_nodes.empty()) {
+            continue; // The token has no access to this tool on ANY node
+        }
+        
+        tool["inputSchema"]["properties"].erase("target_server_id");
+        tool["inputSchema"]["properties"]["target_server_ids"] = {
+            {"type", "array"},
+            {"items", {
+                {"type", "string"},
+                {"enum", allowed_nodes}
+            }},
+            {"description", "Optional list of server IDs to execute this tool on simultaneously."}
+        };
+        
+        std::string desc = tool["inputSchema"]["properties"]["target_server_ids"]["description"];
+        desc += " Allowed servers for your token: [";
+        for (size_t i = 0; i < allowed_nodes.size(); i++) {
+            desc += allowed_nodes[i] + (i == allowed_nodes.size() - 1 ? "" : ", ");
+        }
+        desc += "].";
+        tool["inputSchema"]["properties"]["target_server_ids"]["description"] = desc;
+        
+        filtered.push_back(tool);
     }
     return filtered;
 }
@@ -417,79 +454,120 @@ json handle_tools_call(const json& request, const TokenInfo& token) {
     
     std::string name = request["params"]["name"];
     json arguments = request["params"].value("arguments", json::object());
-    std::string target_server = arguments.value("target_server_id", "local");
     
-    mcp_log("[Tool] Executing: " + name + " on server: " + target_server);
-    g_tool_calls++;
-    
-    // RBAC Check
-    if (!token.permissions.has_tool_access(target_server, name)) {
-        return make_error(id, -32000, "Access Denied: You do not have permission to use tool '" + name + "' on server '" + target_server + "'");
+    std::vector<std::string> target_servers;
+    if (arguments.contains("target_server_ids") && arguments["target_server_ids"].is_array()) {
+        for (const auto& s : arguments["target_server_ids"]) {
+            target_servers.push_back(s.get<std::string>());
+        }
+    }
+    if (target_servers.empty() && arguments.contains("target_server_id")) {
+        target_servers.push_back(arguments.value("target_server_id", "local"));
+    }
+    if (target_servers.empty()) {
+        target_servers.push_back("local");
     }
     
-    if (target_server != "local") {
-        ClusterNode targetNode;
-        if (!ClusterManager::GetInstance().GetNode(target_server, targetNode) || targetNode.status != "connected") {
-            return make_error(id, -32000, "Target node not found or not connected");
+    json combined_content = json::array();
+    
+    for (const std::string& target_server : target_servers) {
+        mcp_log("[Tool] Executing: " + name + " on server: " + target_server);
+        g_tool_calls++;
+        
+        if (!token.permissions.has_tool_access(target_server, name)) {
+            combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "] Error: Access Denied to tool '" + name + "'"}});
+            continue;
         }
         
-        mcp_log("[Proxy] Forwarding request to child node: " + targetNode.ip_address);
-        
-        // Prepare request body
-        std::string req_body = request.dump();
-        
-        // Generate HMAC signature
-        std::string signature = generate_hmac_sha256(targetNode.encryption_key, req_body);
-        
-        // Parse IP address to get host and port
-        std::string ip = targetNode.ip_address;
-        if (ip.find("http://") == 0) ip = ip.substr(7);
-        if (ip.find("https://") == 0) ip = ip.substr(8);
-        
-        httplib::Client cli("http://" + ip); // Assuming HTTP for now. For production, HTTPS is recommended.
-        cli.set_connection_timeout(5, 0);
-        cli.set_read_timeout(30, 0); // Some tools take time
-        
-        httplib::Headers headers = {
-            {"Authorization", "Bearer " + targetNode.master_token},
-            {"X-MCP-Signature", signature},
-            {"Content-Type", "application/json"}
-        };
-        
-        auto res = cli.Post("/mcp", headers, req_body, "application/json");
-        if (res && res->status == 200) {
-            try {
-                return json::parse(res->body);
-            } catch (const std::exception& e) {
-                return make_error(id, -32000, "Failed to parse JSON response from target node: " + std::string(e.what()));
+        json res_json;
+        if (target_server != "local") {
+            ClusterNode targetNode;
+            if (!ClusterManager::GetInstance().GetNode(target_server, targetNode) || targetNode.status != "connected") {
+                combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "] Error: Target node not found or not connected"}});
+                continue;
+            }
+            
+            mcp_log("[Proxy] Forwarding request to child node: " + targetNode.ip_address);
+            
+            json child_req = request;
+            child_req["params"]["arguments"].erase("target_server_ids");
+            child_req["params"]["arguments"]["target_server_id"] = "local";
+            
+            std::string req_body = child_req.dump();
+            std::string signature = generate_hmac_sha256(targetNode.encryption_key, req_body);
+            
+            std::string ip = targetNode.ip_address;
+            if (ip.find("http://") == 0) ip = ip.substr(7);
+            if (ip.find("https://") == 0) ip = ip.substr(8);
+            
+            httplib::Client cli("http://" + ip);
+            cli.set_connection_timeout(5, 0);
+            cli.set_read_timeout(30, 0);
+            
+            httplib::Headers headers = {
+                {"Authorization", "Bearer " + targetNode.master_token},
+                {"X-MCP-Signature", signature},
+                {"Content-Type", "application/json"}
+            };
+            
+            auto res = cli.Post("/mcp", headers, req_body, "application/json");
+            if (res && res->status == 200) {
+                try {
+                    res_json = json::parse(res->body);
+                } catch (const std::exception& e) {
+                    combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "] Error parsing response: " + std::string(e.what())}});
+                    continue;
+                }
+            } else {
+                combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "] Error: HTTP " + (res ? std::to_string(res->status) : "Connection Error")}});
+                continue;
             }
         } else {
-            std::string err_msg = "Failed to communicate with target node. HTTP Status: " + (res ? std::to_string(res->status) : "Connection Error");
-            return make_error(id, -32000, err_msg);
+            fs::path base_dir = BASE_DIR;
+            auto it = token.permissions.server_workspaces.find("local");
+            if (it != token.permissions.server_workspaces.end() && !it->second.empty()) {
+                base_dir = it->second;
+            }
+            
+            if (name == "list_directory") {
+                res_json = tool_list_directory(id, arguments, base_dir);
+            } else if (name == "read_file") {
+                res_json = tool_read_file(id, arguments, base_dir);
+            } else if (name == "write_file") {
+                res_json = tool_write_file(id, arguments, base_dir);
+            } else if (name == "start_script") {
+                res_json = tool_start_script(id, arguments, base_dir);
+            } else if (name == "search_files") {
+                res_json = tool_search_files(id, arguments, base_dir);
+            } else if (name == "execute_command") {
+                res_json = tool_execute_command(id, arguments, base_dir);
+            } else if (name == "take_screenshot") {
+                res_json = tool_take_screenshot(id, arguments, base_dir);
+            } else {
+                res_json = make_error(id, -32601, "Tool not found");
+            }
+        }
+        
+        if (res_json.contains("result") && res_json["result"].contains("content") && res_json["result"]["content"].is_array()) {
+            for (const auto& item : res_json["result"]["content"]) {
+                if (item.contains("text")) {
+                    std::string original_text = item["text"].get<std::string>();
+                    combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "]\n" + original_text}});
+                } else {
+                    combined_content.push_back(item);
+                }
+            }
+        } else if (res_json.contains("error")) {
+            std::string err_msg = res_json["error"].value("message", "Unknown error");
+            combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "] Error: " + err_msg}});
         }
     }
     
-    fs::path base_dir = BASE_DIR;
-    auto it = token.permissions.server_workspaces.find("local");
-    if (it != token.permissions.server_workspaces.end() && !it->second.empty()) {
-        base_dir = it->second;
-    }
-    
-    if (name == "list_directory") {
-        return tool_list_directory(id, arguments, base_dir);
-    } else if (name == "read_file") {
-        return tool_read_file(id, arguments, base_dir);
-    } else if (name == "write_file") {
-        return tool_write_file(id, arguments, base_dir);
-    } else if (name == "start_script") {
-        return tool_start_script(id, arguments, base_dir);
-    } else if (name == "search_files") {
-        return tool_search_files(id, arguments, base_dir);
-    } else if (name == "execute_command") {
-        return tool_execute_command(id, arguments, base_dir);
-    } else if (name == "take_screenshot") {
-        return tool_take_screenshot(id, arguments, base_dir);
-    } else {
-        return make_error(id, -32601, "Tool not found");
-    }
+    return {
+        {"jsonrpc", "2.0"},
+        {"id", id},
+        {"result", {
+            {"content", combined_content}
+        }}
+    };
 }

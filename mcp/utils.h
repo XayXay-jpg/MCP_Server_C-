@@ -9,6 +9,7 @@
 // Global logger callback
 extern std::function<void(const std::string&)> g_log_callback;
 extern std::function<void(const std::string&, const std::string&)> g_notify_callback;
+extern std::function<bool(const std::string&, const std::string&)> g_confirm_callback;
 extern std::function<void()> g_refresh_cluster_callback;
 void mcp_log(const std::string& message);
 

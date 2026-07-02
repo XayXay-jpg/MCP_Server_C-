@@ -250,6 +250,7 @@ private:
     void OnApproveNode(wxCommandEvent& event);
     void OnRejectNode(wxCommandEvent& event);
     void OnAddNode(wxCommandEvent& event);
+    void OnNodeIdEdited(wxListEvent& event);
     
     void OnGridSize(wxSizeEvent& event);
     

@@ -45,6 +45,9 @@ public:
     // Update last seen timestamp
     void PingNode(const std::string& id);
 
+    bool UpdateNodeId(const std::string& oldId, const std::string& newId);
+    bool SetNodeStatus(const std::string& id, const std::string& status);
+
 private:
     ClusterManager() {}
     std::vector<ClusterNode> nodes;

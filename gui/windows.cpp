@@ -11,8 +11,8 @@
 #include <wx/mstream.h>
 #include <wx/base64.h>
 #include <wx/dcgraph.h>
-
 #include <wx/statline.h>
+#include <future>
 #include <fstream>
 #include <wx/textdlg.h>
 #include <wx/notifmsg.h>
@@ -197,6 +197,18 @@ Windows::Windows(const wxString& title) : wxFrame(NULL, wxID_ANY, title, wxDefau
         CallAfter([this]() {
             RefreshNodesList();
         });
+    };
+    
+    g_confirm_callback = [this](const std::string& title, const std::string& msg) -> bool {
+        std::promise<bool> promise;
+        auto future = promise.get_future();
+        
+        CallAfter([&promise, title, msg, this]() {
+            int res = wxMessageBox(msg, title, wxYES_NO | wxICON_QUESTION, this);
+            promise.set_value(res == wxYES);
+        });
+        
+        return future.get();
     };
     
     Bind(wxEVT_SERVER_NOTIFY, &Windows::OnServerNotify, this);
@@ -744,7 +756,8 @@ void Windows::SetupUI() {
     clusterCard->SetBackgroundColour(wxColour("#18181B")); // Zinc 900 Card
     wxBoxSizer* clusterCardSizer = new wxBoxSizer(wxVERTICAL);
     
-    listNodes = new wxListCtrl(clusterCard, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxBORDER_NONE | wxLC_SINGLE_SEL | wxLC_HRULES);
+    listNodes = new wxListCtrl(clusterCard, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxBORDER_NONE | wxLC_SINGLE_SEL | wxLC_HRULES | wxLC_EDIT_LABELS);
+    listNodes->Bind(wxEVT_LIST_END_LABEL_EDIT, &Windows::OnNodeIdEdited, this);
     listNodes->InsertColumn(0, lang.GetString("NODE_ID"), wxLIST_FORMAT_LEFT, 150);
     listNodes->InsertColumn(1, lang.GetString("HOSTNAME"), wxLIST_FORMAT_LEFT, 150);
     listNodes->InsertColumn(2, lang.GetString("IP_ADDRESS"), wxLIST_FORMAT_LEFT, 130);
@@ -1387,6 +1400,28 @@ void Windows::OnAddNode(wxCommandEvent& event) {
         ClusterManager::GetInstance().ApproveNode(nodeId); // Auto approve manual
         RefreshNodesList();
     }
+}
+
+void Windows::OnNodeIdEdited(wxListEvent& event) {
+    long item = event.GetIndex();
+    wxString newId = event.GetLabel();
+    if (newId.IsEmpty() || item == -1) {
+        event.Veto();
+        return;
+    }
+    
+    // Get the old ID which is currently in the list before the edit is accepted
+    std::string oldId = listNodes->GetItemText(item).ToStdString();
+    
+    // Update the ID in the ClusterManager
+    if (!ClusterManager::GetInstance().UpdateNodeId(oldId, newId.ToStdString())) {
+        wxMessageBox("Node ID already exists or invalid.", "Error", wxICON_ERROR);
+        event.Veto();
+        return;
+    }
+    
+    // Let wxWidgets accept the new label
+    event.Allow();
 }
 
 void Windows::RefreshNodesList() {

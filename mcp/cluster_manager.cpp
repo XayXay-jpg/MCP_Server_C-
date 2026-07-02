@@ -106,9 +106,14 @@ bool ClusterManager::ApproveNode(const std::string& id) {
             std::thread([id, ip, mt = n.master_token, ek = n.encryption_key]() {
                 httplib::Client cli("http://" + ip);
                 cli.set_connection_timeout(5, 0);
+                const char* hn_env = std::getenv("HOSTNAME");
+                if (!hn_env) hn_env = std::getenv("COMPUTERNAME");
+                std::string my_hostname = hn_env ? hn_env : "ParentNode";
+                
                 json req = {
                     {"master_token", mt},
-                    {"encryption_key", ek}
+                    {"encryption_key", ek},
+                    {"parent_hostname", my_hostname}
                 };
                 if (auto res = cli.Post("/cluster/configure", req.dump(), "application/json")) {
                     if (res->status == 200) {
@@ -174,6 +179,35 @@ void ClusterManager::RemoveNode(const std::string& id) {
         nodes.erase(it, nodes.end());
         SaveNodes();
     }
+}
+
+bool ClusterManager::UpdateNodeId(const std::string& oldId, const std::string& newId) {
+    std::lock_guard<std::mutex> lock(mtx);
+    // Check if newId already exists
+    for (const auto& n : nodes) {
+        if (n.id == newId) return false;
+    }
+    
+    for (auto& n : nodes) {
+        if (n.id == oldId) {
+            n.id = newId;
+            SaveNodes();
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ClusterManager::SetNodeStatus(const std::string& id, const std::string& status) {
+    std::lock_guard<std::mutex> lock(mtx);
+    for (auto& n : nodes) {
+        if (n.id == id) {
+            n.status = status;
+            SaveNodes();
+            return true;
+        }
+    }
+    return false;
 }
 
 std::vector<ClusterNode> ClusterManager::GetNodes() {
