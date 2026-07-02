@@ -472,6 +472,7 @@ json handle_tools_call(const json& request, const TokenInfo& token) {
     }
     
     json combined_content = json::array();
+    bool has_error = false;
     
     for (const std::string& target_server : target_servers) {
         mcp_log("[Tool] Executing: " + name + " on server: " + target_server);
@@ -555,26 +556,46 @@ json handle_tools_call(const json& request, const TokenInfo& token) {
             }
         }
         
+        bool is_error_response = false;
         if (res_json.contains("result") && res_json["result"].contains("content") && res_json["result"]["content"].is_array()) {
             for (const auto& item : res_json["result"]["content"]) {
                 if (item.contains("text")) {
                     std::string original_text = item["text"].get<std::string>();
-                    combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "]\n" + original_text}});
+                    if (target_servers.size() > 1 || target_server != "local") {
+                        combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "]\n" + original_text}});
+                    } else {
+                        combined_content.push_back({{"type", "text"}, {"text", original_text}});
+                    }
                 } else {
                     combined_content.push_back(item);
                 }
             }
+            if (res_json["result"].contains("isError") && res_json["result"]["isError"].get<bool>()) {
+                is_error_response = true;
+            }
         } else if (res_json.contains("error")) {
             std::string err_msg = res_json["error"].value("message", "Unknown error");
-            combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "] Error: " + err_msg}});
+            if (target_servers.size() > 1 || target_server != "local") {
+                combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "] Error: " + err_msg}});
+            } else {
+                combined_content.push_back({{"type", "text"}, {"text", "Error: " + err_msg}});
+            }
+            is_error_response = true;
         }
+        
+        if (is_error_response) has_error = true;
+    }
+    
+    json final_result = {
+        {"content", combined_content}
+    };
+    if (has_error) {
+        final_result["isError"] = true;
     }
     
     return {
         {"jsonrpc", "2.0"},
         {"id", id},
-        {"result", {
-            {"content", combined_content}
-        }}
+        {"result", final_result}
     };
 }

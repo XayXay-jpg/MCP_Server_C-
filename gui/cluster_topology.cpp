@@ -10,6 +10,8 @@ BEGIN_EVENT_TABLE(ClusterTopologyPanel, wxPanel)
     EVT_PAINT(ClusterTopologyPanel::OnPaint)
     EVT_RIGHT_UP(ClusterTopologyPanel::OnRightClick)
     EVT_LEFT_DCLICK(ClusterTopologyPanel::OnLeftDblClick)
+    EVT_LEFT_DOWN(ClusterTopologyPanel::OnLeftDown)
+    EVT_LEFT_UP(ClusterTopologyPanel::OnLeftUp)
     EVT_MOTION(ClusterTopologyPanel::OnMouseMove)
     EVT_MOUSEWHEEL(ClusterTopologyPanel::OnMouseWheel)
     EVT_MIDDLE_DOWN(ClusterTopologyPanel::OnMiddleDown)
@@ -60,12 +62,38 @@ std::string ClusterTopologyPanel::HitTest(const wxPoint& pt) const {
     return "";
 }
 
+void ClusterTopologyPanel::OnLeftDown(wxMouseEvent& event) {
+    std::string hit = HitTest(event.GetPosition());
+    if (!hit.empty()) {
+        m_draggedNodeId = hit;
+        double adjustedX = (event.GetPosition().x - m_offsetX) / m_scale;
+        double adjustedY = (event.GetPosition().y - m_offsetY) / m_scale;
+        for (const auto& nr : m_nodeRects) {
+            if (nr.id == hit) {
+                m_dragOffset = wxPoint(adjustedX - nr.rect.x, adjustedY - nr.rect.y);
+                break;
+            }
+        }
+    }
+    event.Skip();
+}
+
+void ClusterTopologyPanel::OnLeftUp(wxMouseEvent& event) {
+    m_draggedNodeId.clear();
+    event.Skip();
+}
+
 void ClusterTopologyPanel::OnMouseMove(wxMouseEvent& event) {
-    if (m_isDragging) {
+    if (m_isDraggingCanvas) {
         wxPoint delta = event.GetPosition() - m_lastMousePos;
         m_offsetX += delta.x;
         m_offsetY += delta.y;
         m_lastMousePos = event.GetPosition();
+        Refresh();
+    } else if (!m_draggedNodeId.empty() && event.LeftIsDown()) {
+        double adjustedX = (event.GetPosition().x - m_offsetX) / m_scale;
+        double adjustedY = (event.GetPosition().y - m_offsetY) / m_scale;
+        m_customPositions[m_draggedNodeId] = wxPoint(adjustedX - m_dragOffset.x, adjustedY - m_dragOffset.y);
         Refresh();
     } else {
         std::string prev = m_hoveredId;
@@ -96,13 +124,13 @@ void ClusterTopologyPanel::OnMouseWheel(wxMouseEvent& event) {
 }
 
 void ClusterTopologyPanel::OnMiddleDown(wxMouseEvent& event) {
-    m_isDragging = true;
+    m_isDraggingCanvas = true;
     m_lastMousePos = event.GetPosition();
     SetCursor(wxCursor(wxCURSOR_HAND));
 }
 
 void ClusterTopologyPanel::OnMiddleUp(wxMouseEvent& event) {
-    m_isDragging = false;
+    m_isDraggingCanvas = false;
     SetCursor(wxCursor(wxCURSOR_ARROW));
     m_hoveredId = HitTest(event.GetPosition());
 }
@@ -119,26 +147,35 @@ void ClusterTopologyPanel::OnTimer(wxTimerEvent&) {
 void ClusterTopologyPanel::DrawConnection(wxGraphicsContext* gc, int x1, int y1, int x2, int y2, const std::string& status) {
     wxColour col = StatusColor(status);
     
+    // End the line slightly before the tip so the thick glow doesn't overlap the node border
+    float angle = std::atan2(y2 - y1, x2 - x1);
+    float asize = 11.0f;
+    float lineEndX = x2 - (asize - 2) * std::cos(angle);
+    float lineEndY = y2 - (asize - 2) * std::sin(angle);
+
     // Draw glow for connected
     if (status == "connected") {
-        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(wxColour(col.Red(), col.Green(), col.Blue(), 30)).Width(12)));
-        gc->SetBrush(*wxTRANSPARENT_BRUSH);
-        wxGraphicsPath glow = gc->CreatePath();
-        glow.MoveToPoint(x1, y1);
-        glow.AddLineToPoint(x2, y2);
-        gc->StrokePath(glow);
+        wxGraphicsPenInfo glowPen1(wxColour(col.Red(), col.Green(), col.Blue(), 20));
+        glowPen1.Width(16).Cap(wxCAP_ROUND);
+        gc->SetPen(gc->CreatePen(glowPen1));
+        gc->StrokeLine(x1, y1, lineEndX, lineEndY);
+
+        wxGraphicsPenInfo glowPen2(wxColour(col.Red(), col.Green(), col.Blue(), 50));
+        glowPen2.Width(6).Cap(wxCAP_ROUND);
+        gc->SetPen(gc->CreatePen(glowPen2));
+        gc->StrokeLine(x1, y1, lineEndX, lineEndY);
     }
     
     // Main line
-    gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(col).Width(2)));
+    gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(col).Width(2).Cap(wxCAP_ROUND)));
     wxGraphicsPath path = gc->CreatePath();
     
     if (status == "connecting...") {
         // Animated dashed line
         int dashLen = 12, gapLen = 8, cycle = dashLen + gapLen;
-        int totalLen = (int)std::sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1));
-        float dx = (float)(x2 - x1) / totalLen;
-        float dy = (float)(y2 - y1) / totalLen;
+        int totalLen = (int)std::sqrt((lineEndX-x1)*(lineEndX-x1) + (lineEndY-y1)*(lineEndY-y1));
+        float dx = (float)(lineEndX - x1) / totalLen;
+        float dy = (float)(lineEndY - y1) / totalLen;
         int offset = (m_animPhase * 3) % cycle;
         float cx = x1 + dx * offset;
         float cy = y1 + dy * offset;
@@ -158,23 +195,21 @@ void ClusterTopologyPanel::DrawConnection(wxGraphicsContext* gc, int x1, int y1,
             }
         }
         if (drawing) path.AddLineToPoint(cx, cy);
+        gc->StrokePath(path);
     } else {
-        path.MoveToPoint(x1, y1);
-        path.AddLineToPoint(x2, y2);
+        gc->StrokeLine(x1, y1, lineEndX, lineEndY);
     }
-    gc->StrokePath(path);
     
     // Arrow tip at y2
-    float angle = std::atan2(y2 - y1, x2 - x1);
-    float asize = 9.0f;
-    gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(col).Width(2)));
+    gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(col).Width(1)));
     gc->SetBrush(gc->CreateBrush(wxBrush(col)));
     wxGraphicsPath arrow = gc->CreatePath();
     arrow.MoveToPoint(x2, y2);
-    arrow.AddLineToPoint(x2 - asize * std::cos(angle - 0.45f), y2 - asize * std::sin(angle - 0.45f));
-    arrow.AddLineToPoint(x2 - asize * std::cos(angle + 0.45f), y2 - asize * std::sin(angle + 0.45f));
+    arrow.AddLineToPoint(x2 - asize * std::cos(angle - 0.40f), y2 - asize * std::sin(angle - 0.40f));
+    arrow.AddLineToPoint(x2 - asize * std::cos(angle + 0.40f), y2 - asize * std::sin(angle + 0.40f));
     arrow.CloseSubpath();
     gc->FillPath(arrow);
+    gc->StrokePath(arrow);
 }
 
 void ClusterTopologyPanel::DrawNode(wxGraphicsContext* gc, const ClusterNode& node,
@@ -315,11 +350,26 @@ void ClusterTopologyPanel::OnPaint(wxPaintEvent&) {
     if (!parents.empty()) selfY = H / 2 - 10;
     if (!children.empty() && parents.empty()) selfY = (H - nh) / 2;
 
+    if (m_customPositions.count("__self__")) {
+        selfX = m_customPositions["__self__"].x;
+        selfY = m_customPositions["__self__"].y;
+    } else {
+        m_customPositions["__self__"] = wxPoint(selfX, selfY);
+    }
+
     // Draw parent nodes (above self)
     int parentCount = (int)parents.size();
     for (int i = 0; i < parentCount; i++) {
         int px = (W - nw * parentCount - 20 * (parentCount - 1)) / 2 + i * (nw + 20);
         int py = selfY - 160;
+        
+        if (m_customPositions.count(parents[i].id)) {
+            px = m_customPositions[parents[i].id].x;
+            py = m_customPositions[parents[i].id].y;
+        } else {
+            m_customPositions[parents[i].id] = wxPoint(px, py);
+        }
+        
         DrawNode(gc, parents[i], px, py, nw, nh, false);
         m_nodeRects.push_back({wxRect(px, py, nw, nh), parents[i].id, false, true});
 
@@ -354,6 +404,14 @@ void ClusterTopologyPanel::OnPaint(wxPaintEvent&) {
     for (int i = 0; i < childCount; i++) {
         int cx = childStartX + i * (nw + 30);
         int cy = childRowY;
+        
+        if (m_customPositions.count(children[i].id)) {
+            cx = m_customPositions[children[i].id].x;
+            cy = m_customPositions[children[i].id].y;
+        } else {
+            m_customPositions[children[i].id] = wxPoint(cx, cy);
+        }
+        
         DrawNode(gc, children[i], cx, cy, nw, nh, false);
         m_nodeRects.push_back({wxRect(cx, cy, nw, nh), children[i].id, false, false});
 
@@ -408,7 +466,7 @@ void ClusterTopologyPanel::OnRightClick(wxMouseEvent& event) {
     titleItem->Enable(false);
     menu.AppendSeparator();
 
-    if (node.status == "offline" || node.status == "pending" || node.status == "error_403") {
+    if (node.status != "connecting...") {
         if (!node.is_parent) menu.Append(CTA_RECONNECT, wxT("🔄  Reconnect"));
         else menu.Append(CTA_RECONNECT, wxT("🔄  Refresh Connection"));
     }

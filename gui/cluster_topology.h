@@ -44,6 +44,8 @@ private:
     void OnTimer(wxTimerEvent& event);
     void OnRightClick(wxMouseEvent& event);
     void OnLeftDblClick(wxMouseEvent& event);
+    void OnLeftDown(wxMouseEvent& event);
+    void OnLeftUp(wxMouseEvent& event);
     void OnMouseMove(wxMouseEvent& event);
     void OnMouseWheel(wxMouseEvent& event);
     void OnMiddleDown(wxMouseEvent& event);
@@ -52,8 +54,12 @@ private:
     double m_scale = 1.0;
     double m_offsetX = 0.0;
     double m_offsetY = 0.0;
-    bool m_isDragging = false;
+    bool m_isDraggingCanvas = false;
     wxPoint m_lastMousePos;
+
+    std::string m_draggedNodeId;
+    wxPoint m_dragOffset;
+    std::map<std::string, wxPoint> m_customPositions;
 
     void DrawNode(wxGraphicsContext* gc, const ClusterNode& node,
                   int x, int y, int w, int h, bool isSelf);
