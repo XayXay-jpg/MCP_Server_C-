@@ -113,10 +113,17 @@ bool ClusterManager::ApproveNode(const std::string& id) {
         }
     } // <-- lock released BEFORE spawning thread to avoid deadlock
     
-    if (ip.empty()) return false;
+    if (ip.empty()) {
+        mcp_log("[Error] ApproveNode: node '" + id + "' not found or has empty ip_address.");
+        return false;
+    }
     
+    // Strip protocol prefix if stored with it (legacy compatibility)
     if (ip.find("http://") == 0) ip = ip.substr(7);
     if (ip.find("https://") == 0) ip = ip.substr(8);
+    while (!ip.empty() && ip.back() == '/') ip.pop_back();
+    
+    mcp_log("[Info] ApproveNode: Connecting to child '" + id + "' at http://" + ip);
     
     std::thread([id, ip, mt, ek]() {
         httplib::Client cli("http://" + ip);

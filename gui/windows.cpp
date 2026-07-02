@@ -1397,14 +1397,19 @@ void Windows::OnRejectNode(wxCommandEvent& event) {
 
 void Windows::OnAddNode(wxCommandEvent& event) {
     // Show a dialog to manually add a node
-    wxTextEntryDialog dlg(this, "Enter Child Node URL (e.g. http://192.168.1.100:3000):", "Add Manual Node");
+    wxTextEntryDialog dlg(this, "Enter Child Node address (e.g. 192.168.1.100:3000):", "Add Manual Node");
     if (dlg.ShowModal() == wxID_OK) {
         std::string url = dlg.GetValue().ToStdString();
-        // Generate a random ID for manual nodes or ask for it
-        std::string nodeId = "manual_" + std::to_string(rand() % 10000);
+        // Strip any protocol prefix — we store only ip:port
+        if (url.find("http://") == 0) url = url.substr(7);
+        if (url.find("https://") == 0) url = url.substr(8);
+        // Remove trailing slash
+        while (!url.empty() && url.back() == '/') url.pop_back();
         
-        ClusterManager::GetInstance().RegisterNodeRequest(nodeId, url, url, "manual");
-        ClusterManager::GetInstance().ApproveNode(nodeId); // Auto approve manual
+        std::string nodeId = "child_" + std::to_string(rand() % 10000);
+        
+        ClusterManager::GetInstance().RegisterNodeRequest(nodeId, url, "", "Unknown");
+        ClusterManager::GetInstance().ApproveNode(nodeId);
         RefreshNodesList();
     }
 }
