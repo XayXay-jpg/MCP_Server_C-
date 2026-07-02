@@ -115,14 +115,17 @@ json get_available_tools(const TokenInfo& token) {
             continue;
         }
         
+        // If token has NO permissions configured at all — treat it as having full local access
+        bool no_permissions_configured = token.permissions.allowed_servers.empty();
+        
         std::vector<std::string> allowed_nodes;
-        if (token.permissions.has_tool_access("local", name)) {
+        if (no_permissions_configured || token.permissions.has_tool_access("local", name)) {
             allowed_nodes.push_back("local");
         }
         
         for (const auto& node : ClusterManager::GetInstance().GetNodes()) {
             if (node.status == "connected") {
-                if (token.permissions.has_tool_access(node.id, name)) {
+                if (no_permissions_configured || token.permissions.has_tool_access(node.id, name)) {
                     allowed_nodes.push_back(node.id);
                 }
             }
