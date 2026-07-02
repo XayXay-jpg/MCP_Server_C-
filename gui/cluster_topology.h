@@ -13,6 +13,7 @@ enum ClusterTopologyAction {
     CTA_RENAME,
     CTA_DETAILS,
     CTA_ADD_CHILD,
+    CTA_ADD_PARENT,
     CTA_APPROVE,
     CTA_REJECT,
 };

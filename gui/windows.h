@@ -245,6 +245,7 @@ private:
     void OnCheckNetwork(wxCommandEvent& event);
     void OnCustomDomainChanged(wxCommandEvent& event);
     void OnAddNode(wxCommandEvent& event);
+    void OnAddParentNode();
     
     void OnGridSize(wxSizeEvent& event);
     

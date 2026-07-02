@@ -12,6 +12,7 @@
 #include <wx/base64.h>
 #include <wx/dcgraph.h>
 #include <wx/statline.h>
+#include <httplib.h>
 #include <future>
 #include <fstream>
 #include <wx/textdlg.h>
@@ -759,6 +760,10 @@ void Windows::SetupUI() {
             OnAddNode(evt);
             break;
         }
+        case CTA_ADD_PARENT: {
+            OnAddParentNode();
+            break;
+        }
         case CTA_RECONNECT: {
             ClusterManager::GetInstance().SetNodeStatus(nodeId, "connecting...");
             topoPanel->RefreshTopology();
@@ -1402,6 +1407,49 @@ void Windows::OnAddNode(wxCommandEvent& event) {
         ClusterManager::GetInstance().RegisterNodeRequest(nodeId, url, name, "Unknown");
         ClusterManager::GetInstance().ApproveNode(nodeId);
         RefreshNodesList();
+    }
+}
+
+void Windows::OnAddParentNode() {
+    wxTextEntryDialog dlg(this, "Enter Parent Node address (e.g. 192.168.1.100:3000):", "Join Cluster");
+    if (dlg.ShowModal() == wxID_OK) {
+        std::string url = dlg.GetValue().ToStdString();
+        if (url.empty()) return;
+        
+        if (url.find("http://") == 0) url = url.substr(7);
+        if (url.find("https://") == 0) url = url.substr(8);
+        while (!url.empty() && url.back() == '/') url.pop_back();
+        
+        std::thread([url]() {
+            httplib::Client cli("http://" + url);
+            cli.set_connection_timeout(5);
+            cli.set_read_timeout(5);
+            
+            const char* hn = std::getenv("HOSTNAME");
+            if (!hn) hn = std::getenv("COMPUTERNAME");
+            std::string hostnameStr = hn ? hn : "UnknownNode";
+            
+            std::string platformStr =
+#ifdef _WIN32
+            "Windows";
+#elif defined(__APPLE__)
+            "macOS";
+#else
+            "Linux";
+#endif
+            
+            nlohmann::json req_data = {
+                {"id", "child_" + std::to_string(rand() % 10000)},
+                {"port", "3000"},
+                {"hostname", hostnameStr},
+                {"platform", platformStr}
+            };
+            
+            auto res = cli.Post("/cluster/join", req_data.dump(), "application/json");
+            if (res && res->status == 200) {
+                // Sent successfully. The parent will now ping us to configure.
+            }
+        }).detach();
     }
 }
 

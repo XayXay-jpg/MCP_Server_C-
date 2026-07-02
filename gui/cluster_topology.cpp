@@ -452,9 +452,12 @@ void ClusterTopologyPanel::OnRightClick(wxMouseEvent& event) {
 
     if (hitId.empty() || hitId == "__self__") {
         menu.Append(CTA_ADD_CHILD, wxT("➕  Add Child Node..."));
+        menu.Append(CTA_ADD_PARENT, wxT("🔗  Join Cluster (Add Parent)..."));
         int sel = GetPopupMenuSelectionFromUser(menu, event.GetPosition());
         if (sel == CTA_ADD_CHILD && onAction) {
             onAction("__self__", CTA_ADD_CHILD);
+        } else if (sel == CTA_ADD_PARENT && onAction) {
+            onAction("__self__", CTA_ADD_PARENT);
         }
         return;
     }

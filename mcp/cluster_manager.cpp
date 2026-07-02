@@ -152,6 +152,50 @@ bool ClusterManager::ApproveNode(const std::string& id) {
             } catch (...) {}
         }
         
+        if (id == "parent") {
+            // We are the child. We want to reconnect to the parent.
+            // Send a join request so the parent knows we are alive and configures us.
+            const char* hn = std::getenv("HOSTNAME");
+            if (!hn) hn = std::getenv("COMPUTERNAME");
+            std::string child_hostname = hn ? hn : "UnknownNode";
+            
+            std::string child_platform =
+#ifdef _WIN32
+            "Windows";
+#elif defined(__APPLE__)
+            "macOS";
+#else
+            "Linux";
+#endif
+            nlohmann::json req_data = {
+                {"id", "child_" + std::to_string(rand() % 10000)},
+                {"port", "3000"},
+                {"hostname", child_hostname},
+                {"platform", child_platform}
+            };
+            httplib::Client cli(host, port);
+            cli.set_connection_timeout(5, 0);
+            if (auto res = cli.Post("/cluster/join", req_data.dump(), "application/json")) {
+                if (res->status == 200) {
+                    mcp_log("[Info] Successfully sent join request to parent at " + host);
+                    // Leave status as "connecting...", the parent will send /cluster/configure to finalize.
+                } else {
+                    mcp_log("[Error] Parent rejected join request: HTTP " + std::to_string(res->status));
+                    std::lock_guard<std::mutex> lk(ClusterManager::GetInstance().mtx);
+                    for (auto& node : ClusterManager::GetInstance().nodes) {
+                        if (node.id == id) { node.status = "error_403"; break; }
+                    }
+                }
+            } else {
+                std::lock_guard<std::mutex> lk(ClusterManager::GetInstance().mtx);
+                for (auto& node : ClusterManager::GetInstance().nodes) {
+                    if (node.id == id) { node.status = "offline"; break; }
+                }
+            }
+            if (g_refresh_cluster_callback) g_refresh_cluster_callback();
+            return;
+        }
+        
         bool newly_generated = false;
         std::string final_mt = mt;
         std::string final_ek = ek;
