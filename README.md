@@ -84,20 +84,35 @@ Global application parameters:
 To allow the AI to interact with your PC:
 1. Start the server on the **Dashboard** tab.
 2. Go to the **Network** tab and copy the **Connection String**.
-3. Open your MCP client's configuration file (e.g., `claude_desktop_config.json`).
-4. Add the server config using the `sse` transport type and paste the copied URL.
+3. Open your MCP client's configuration file (e.g., `mcp_config.json` or `claude_desktop_config.json`).
 
-Example configuration for Claude Desktop:
+The configuration syntax depends on your specific AI Assistant or IDE:
+
+**1. For Modern AI IDEs (Antigravity, Cursor, Windsurf):**
+Most modern agentic IDEs natively support remote SSE servers via the `serverUrl` property.
 ```json
 {
   "mcpServers": {
-    "my_workstation": {
-      "command": "sse",
-      "url": "http://192.168.1.100:3000/sse?token=YOUR_GENERATED_TOKEN"
+    "my_remote_workstation": {
+      "serverUrl": "http://192.168.1.100:3000/sse?token=YOUR_GENERATED_TOKEN"
     }
   }
 }
 ```
+
+**2. For Claude Desktop (Local / stdio fallback):**
+By default, Claude Desktop expects local executable commands. To connect it to a remote SSE server, you might need an SSE bridge/proxy, or use supported network fields depending on the app version:
+```json
+{
+  "mcpServers": {
+    "my_workstation": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/client-sse-proxy", "http://192.168.1.100:3000/sse?token=YOUR_GENERATED_TOKEN"]
+    }
+  }
+}
+```
+*Note: Always refer to your specific LLM client's documentation on how to define an SSE (Server-Sent Events) HTTP transport.*
 
 ### Capabilities (Available Tools)
 
@@ -200,20 +215,35 @@ cmake --build . --config Release
 Чтобы нейросеть начала взаимодействовать с вашим ПК (в рамках дозволенного), необходимо:
 1. Запустить сервер на вкладке **Dashboard**.
 2. Перейти на вкладку **Network** и скопировать **Строку подключения (Connection String)**.
-3. Открыть настройки конфигурации вашего MCP-клиента (например, файл `claude_desktop_config.json` для Claude Desktop).
-4. Добавить конфигурацию внешнего сервера, указав тип соединения `sse` и вставив скопированный URL.
+3. Открыть настройки конфигурации вашего MCP-клиента (например, `mcp_config.json` или `claude_desktop_config.json`).
 
-Пример конфигурации для Claude Desktop:
+Синтаксис конфигурации зависит от вашего конкретного ИИ-ассистента или IDE:
+
+**1. Для современных AI IDE (Antigravity, Cursor, Windsurf):**
+Большинство современных агентных сред разработки нативно поддерживают удаленные SSE-серверы через свойство `serverUrl`.
 ```json
 {
   "mcpServers": {
-    "my_local_pc": {
-      "command": "sse",
-      "url": "http://192.168.1.100:3000/sse?token=ВАШ_СГЕНЕРИРОВАННЫЙ_ТОКЕН"
+    "my_remote_workstation": {
+      "serverUrl": "http://192.168.1.100:3000/sse?token=ВАШ_СГЕНЕРИРОВАННЫЙ_ТОКЕН"
     }
   }
 }
 ```
+
+**2. Для Claude Desktop (локальный stdio-режим):**
+По умолчанию Claude Desktop ожидает локальные консольные команды (`command`). Для подключения к удаленному SSE-серверу может потребоваться официальный SSE-прокси:
+```json
+{
+  "mcpServers": {
+    "my_local_pc": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/client-sse-proxy", "http://192.168.1.100:3000/sse?token=ВАШ_СГЕНЕРИРОВАННЫЙ_ТОКЕН"]
+    }
+  }
+}
+```
+*Примечание: Всегда сверяйтесь с документацией вашего конкретного LLM-клиента по поводу того, как правильно объявлять удаленный HTTP/SSE транспорт.*
 
 ### Доступные инструменты (Capabilities)
 
