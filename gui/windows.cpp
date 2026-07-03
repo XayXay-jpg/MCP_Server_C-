@@ -1677,6 +1677,10 @@ void Windows::OnTimer(wxTimerEvent& event) {
                                     s.diskUsedGB  = j.value("disk_used_gb", 0.0);
                                     s.diskTotalGB = j.value("disk_total_gb", 0.0);
                                     s.diskPercent = j.value("disk_percent", 0.0);
+                                    s.vramUsedGB  = j.value("vram_used_gb", 0.0);
+                                    s.vramTotalGB = j.value("vram_total_gb", 0.0);
+                                    s.vramPercent = j.value("vram_percent", 0.0);
+                                    s.hasVRAM     = j.value("has_vram", false);
                                 } catch (...) {}
                             }
                         }
