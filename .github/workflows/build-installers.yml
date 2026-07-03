@@ -14,6 +14,7 @@ jobs:
 
       - name: Install Dependencies (vcpkg)
         run: |
+          choco install nsis -y
           vcpkg install wxwidgets:x64-windows openssl:x64-windows
           vcpkg integrate install
 

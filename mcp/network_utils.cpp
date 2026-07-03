@@ -12,11 +12,23 @@
 
 using json = nlohmann::json;
 
+#ifdef _WIN32
+#define POPEN _popen
+#define PCLOSE _pclose
+#include <process.h>
+#define GETPID _getpid
+#else
+#define POPEN popen
+#define PCLOSE pclose
+#include <unistd.h>
+#define GETPID getpid
+#endif
+
 // Helper to execute system command and get output
 static std::string exec(const char* cmd) {
     std::array<char, 128> buffer;
     std::string result;
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    std::unique_ptr<FILE, int(*)(FILE*)> pipe(POPEN(cmd, "r"), PCLOSE);
     if (!pipe) {
         return "";
     }
@@ -37,7 +49,7 @@ std::string NetworkUtils::GenerateToken() {
         "abcdefghijklmnopqrstuvwxyz";
     std::string tmp_s;
     tmp_s.reserve(32);
-    srand((unsigned)time(NULL) * getpid());
+    srand((unsigned)time(NULL) * GETPID());
     for (int i = 0; i < 32; ++i) {
         tmp_s += alphanum[rand() % (sizeof(alphanum) - 1)];
     }

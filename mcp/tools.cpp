@@ -9,6 +9,14 @@
 #include "cluster_manager.h"
 #include "crypto_utils.h"
 
+#ifdef _WIN32
+#define POPEN _popen
+#define PCLOSE _pclose
+#else
+#define POPEN popen
+#define PCLOSE pclose
+#endif
+
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
@@ -352,7 +360,7 @@ json tool_start_script(const json& id, const json& arguments, const std::filesys
         cmd += " 2>&1"; 
         std::string output;
         try {
-            FILE* pipe = popen(cmd.c_str(), "r");
+            FILE* pipe = POPEN(cmd.c_str(), "r");
             if (!pipe) {
                 return make_error(id, -32000, "Failed to start process");
             }
@@ -360,7 +368,7 @@ json tool_start_script(const json& id, const json& arguments, const std::filesys
             while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
                 output += buffer;
             }
-            int status = pclose(pipe);
+            int status = PCLOSE(pipe);
             std::string final_output = "Process exited with code " + std::to_string(status) + "\nOutput:\n" + output;
             return {
                 {"jsonrpc", "2.0"},
@@ -422,7 +430,7 @@ json tool_execute_command(const json& id, const json& arguments, const std::file
     std::string output;
     
     try {
-        FILE* pipe = popen(cmd.c_str(), "r");
+        FILE* pipe = POPEN(cmd.c_str(), "r");
         if (!pipe) {
             return make_error(id, -32000, "Failed to execute command");
         }
@@ -430,7 +438,7 @@ json tool_execute_command(const json& id, const json& arguments, const std::file
         while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
             output += buffer;
         }
-        int status = pclose(pipe);
+        int status = PCLOSE(pipe);
         
         std::string final_output = "Command exited with code " + std::to_string(status) + "\nOutput:\n" + output;
         
