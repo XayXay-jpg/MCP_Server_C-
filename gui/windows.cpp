@@ -7,6 +7,7 @@
 #include "../mcp/settings_manager.h"
 #include "../mcp/cluster_manager.h"
 #include "../mcp/knowledge_layer.h"
+#include "../mcp/auto_discovery.h"
 #include <nlohmann/json.hpp>
 #include "icons.h"
 #include "permissions_dialog.h"
@@ -917,7 +918,7 @@ void Windows::SetupUI() {
     autoDataPanel->SetBackgroundColour(wxColour("#141416")); // Card background
     wxBoxSizer* autoDataSizer = new wxBoxSizer(wxVERTICAL);
     
-    wxStaticText* lblAutoData = new wxStaticText(autoDataPanel, wxID_ANY, "AUTO-DISCOVERED STATE");
+    wxStaticText* lblAutoData = new wxStaticText(autoDataPanel, wxID_ANY, lang.GetString("AUTO_DISCOVERED_STATE"));
     lblAutoData->SetForegroundColour(wxColour("#A1A1AA"));
     lblAutoData->SetFont(wxFont(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
     
@@ -935,7 +936,7 @@ void Windows::SetupUI() {
     manualDataPanel->SetBackgroundColour(wxColour("#18181B")); // Slightly different background
     wxBoxSizer* manualDataSizer = new wxBoxSizer(wxVERTICAL);
     
-    wxStaticText* lblManualData = new wxStaticText(manualDataPanel, wxID_ANY, "MANUAL ANNOTATIONS");
+    wxStaticText* lblManualData = new wxStaticText(manualDataPanel, wxID_ANY, lang.GetString("MANUAL_ANNOTATIONS"));
     lblManualData->SetForegroundColour(wxColour("#A1A1AA"));
     lblManualData->SetFont(wxFont(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
 
@@ -1546,6 +1547,8 @@ void Windows::OnKnowledgeSectionSelect(wxCommandEvent& event) {
                 n["app_version"] = node.app_version;
                 autoData["nodes"].push_back(n);
             }
+        } else if (section == "applications") {
+            autoData = AutoDiscovery::GetDiscoveredApplications();
         } else {
             autoData["info"] = "No auto-discovered data available for this section.";
         }

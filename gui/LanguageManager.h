@@ -105,6 +105,8 @@ private:
         
         dictionary["EN"]["KNOWLEDGE_BASE"] = wxString::FromUTF8("Knowledge Base");
         dictionary["EN"]["KNOWLEDGE_SUB"] = wxString::FromUTF8("View and edit the AI Digital Twin infrastructure model.");
+        dictionary["EN"]["AUTO_DISCOVERED_STATE"] = wxString::FromUTF8("AUTO-DISCOVERED STATE");
+        dictionary["EN"]["MANUAL_ANNOTATIONS"] = wxString::FromUTF8("MANUAL ANNOTATIONS");
         dictionary["EN"]["SAVE_CHANGES"] = wxString::FromUTF8("Save Changes");
         dictionary["EN"]["BTN_KNOWLEDGE"] = wxString::FromUTF8("Knowledge");
         dictionary["EN"]["SYSTEM_LOAD"] = wxString::FromUTF8("SYSTEM LOAD");
@@ -244,6 +246,8 @@ private:
         
         dictionary["RU"]["KNOWLEDGE_BASE"] = wxString::FromUTF8("База Знаний");
         dictionary["RU"]["KNOWLEDGE_SUB"] = wxString::FromUTF8("Просмотр и редактирование модели инфраструктуры (Digital Twin).");
+        dictionary["RU"]["AUTO_DISCOVERED_STATE"] = wxString::FromUTF8("АВТОМАТИЧЕСКИЕ ДАННЫЕ");
+        dictionary["RU"]["MANUAL_ANNOTATIONS"] = wxString::FromUTF8("РУЧНЫЕ АННОТАЦИИ");
         dictionary["RU"]["SAVE_CHANGES"] = wxString::FromUTF8("Сохранить изменения");
         dictionary["RU"]["BTN_KNOWLEDGE"] = wxString::FromUTF8("Знания");
         dictionary["RU"]["SYSTEM_LOAD"] = wxString::FromUTF8("СИСТЕМНАЯ НАГРУЗКА");
