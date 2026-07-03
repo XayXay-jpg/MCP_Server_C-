@@ -1525,9 +1525,27 @@ void Windows::OnKnowledgeSectionSelect(wxCommandEvent& event) {
             autoData["os_description"] = wxGetOsDescription().ToStdString();
             autoData["user_id"] = wxGetUserId().ToStdString();
             autoData["free_memory_mb"] = wxGetFreeMemory().ToDouble() / (1024 * 1024);
+            autoData["cpu_cores"] = wxThread::GetCPUCount();
+            autoData["workspace_dir"] = wxGetCwd().ToStdString();
         } else if (section == "services") {
             autoData["active_sessions"] = g_active_sessions.load();
             autoData["tool_calls"] = g_tool_calls.load();
+        } else if (section == "cluster") {
+            auto nodes = ClusterManager::GetInstance().GetNodes();
+            autoData["total_nodes"] = nodes.size();
+            autoData["nodes"] = nlohmann::json::array();
+            for (const auto& node : nodes) {
+                nlohmann::json n;
+                n["id"] = node.id;
+                n["hostname"] = node.hostname;
+                n["ip_address"] = node.ip_address;
+                n["local_ip"] = node.local_ip;
+                n["status"] = node.status;
+                n["platform"] = node.platform;
+                n["os_version"] = node.os_version;
+                n["app_version"] = node.app_version;
+                autoData["nodes"].push_back(n);
+            }
         } else {
             autoData["info"] = "No auto-discovered data available for this section.";
         }

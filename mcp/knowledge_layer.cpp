@@ -21,17 +21,25 @@ void KnowledgeLayer::Load(const std::string& workspace_dir) {
                 knowledgeData = nlohmann::json::object();
             }
         }
-    } else {
-        // Initialize default digital twin structure
-        knowledgeData = {
-            {"server", {{"description", "Main server info"}}},
-            {"services", {}},
-            {"applications", {}},
-            {"policies", {}},
-            {"workflow", {}},
-            {"incidents", {}},
-            {"notes", {}}
-        };
+    }
+    
+    // Ensure default sections exist
+    std::vector<std::string> default_sections = {
+        "server", "services", "applications", "policies", 
+        "workflow", "incidents", "notes", "cluster"
+    };
+    
+    bool changed = false;
+    for (const auto& sec : default_sections) {
+        if (!knowledgeData.contains(sec)) {
+            knowledgeData[sec] = nlohmann::json::object();
+            if (sec == "server") knowledgeData[sec] = {{"description", "Main server info"}};
+            if (sec == "cluster") knowledgeData[sec] = {{"description", "Child servers and family nodes configuration"}};
+            changed = true;
+        }
+    }
+    
+    if (changed || !std::filesystem::exists(filepath)) {
         Save();
     }
 }
