@@ -151,40 +151,67 @@ void NetworkUtils::ToggleTokenActive(const std::string& id) {
     SaveTokens(tokens);
 }
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
+#endif
 #include <string.h>
 
 bool CheckPort(const std::string& ip, int port, int timeout_sec) {
+#ifdef _WIN32
+    SOCKET sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == INVALID_SOCKET) return false;
+    
+    unsigned long mode = 1;
+    ioctlsocket(sockfd, FIONBIO, &mode);
+#else
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) return false;
     
     int flags = fcntl(sockfd, F_GETFL, 0);
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+#endif
     
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     if (inet_pton(AF_INET, ip.c_str(), &addr.sin_addr) <= 0) {
-        // Fallback for localhost resolution
         if (ip == "localhost") {
             inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
         } else {
+#ifdef _WIN32
+            closesocket(sockfd);
+#else
             close(sockfd);
+#endif
             return false;
         }
     }
     
     int res = connect(sockfd, (struct sockaddr*)&addr, sizeof(addr));
+#ifdef _WIN32
+    if (res == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK) {
+        closesocket(sockfd);
+        return false;
+    }
+#else
     if (res < 0 && errno != EINPROGRESS) {
         close(sockfd);
         return false;
     }
+#endif
     
     if (res == 0) {
+#ifdef _WIN32
+        closesocket(sockfd);
+#else
         close(sockfd);
+#endif
         return true;
     }
     
@@ -195,17 +222,29 @@ bool CheckPort(const std::string& ip, int port, int timeout_sec) {
     tv.tv_sec = timeout_sec;
     tv.tv_usec = 0;
     
-    res = select(sockfd + 1, NULL, &fdset, NULL, &tv);
+    res = select((int)sockfd + 1, NULL, &fdset, NULL, &tv);
     if (res == 1) {
         int so_error;
+#ifdef _WIN32
+        int len = sizeof(so_error);
+#else
         socklen_t len = sizeof(so_error);
-        getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &so_error, &len);
+#endif
+        getsockopt(sockfd, SOL_SOCKET, SO_ERROR, (char*)&so_error, &len);
         if (so_error == 0) {
+#ifdef _WIN32
+            closesocket(sockfd);
+#else
             close(sockfd);
+#endif
             return true;
         }
     }
+#ifdef _WIN32
+    closesocket(sockfd);
+#else
     close(sockfd);
+#endif
     return false;
 }
 
