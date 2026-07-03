@@ -9,6 +9,7 @@
 #include <chrono>
 #include <thread>
 #include <httplib.h>
+#include "thread_pool.h"
 #ifndef _WIN32
 #include <unistd.h>
 #endif
@@ -150,7 +151,7 @@ bool ClusterManager::ApproveNode(const std::string& id) {
         mcp_log("[Info] ApproveNode: Connecting to child '" + id + "' at http://" + ip);
     }
     
-    std::thread([id, ip, mt, ek]() {
+    ThreadPool::GetInstance().enqueue([id, ip, mt, ek]() {
         std::string host = ip;
         int port = 3000; // default MCP port
         size_t colon_pos = host.find_last_of(':');
@@ -322,7 +323,7 @@ bool ClusterManager::ApproveNode(const std::string& id) {
         if (g_refresh_cluster_callback) {
             g_refresh_cluster_callback();
         }
-    }).detach();
+    });
     
     return true;
 }
