@@ -102,6 +102,11 @@ private:
         dictionary["EN"]["TAB_OVERVIEW"] = wxString::FromUTF8("Overview");
         dictionary["EN"]["TAB_CONNECTIONS"] = wxString::FromUTF8("Connections");
         dictionary["EN"]["TAB_LOGS"] = wxString::FromUTF8("Logs");
+        
+        dictionary["EN"]["KNOWLEDGE_BASE"] = wxString::FromUTF8("Knowledge Base");
+        dictionary["EN"]["KNOWLEDGE_SUB"] = wxString::FromUTF8("View and edit the AI Digital Twin infrastructure model.");
+        dictionary["EN"]["SAVE_CHANGES"] = wxString::FromUTF8("Save Changes");
+        dictionary["EN"]["BTN_KNOWLEDGE"] = wxString::FromUTF8("Knowledge");
         dictionary["EN"]["SYSTEM_LOAD"] = wxString::FromUTF8("SYSTEM LOAD");
         dictionary["EN"]["LOCAL_SERVER_COMBO"] = wxString::FromUTF8("Local Server");
         dictionary["EN"]["CPU_LABEL"] = wxString::FromUTF8("CPU: 0%");
@@ -235,7 +240,12 @@ private:
         // New translations
         dictionary["RU"]["TAB_OVERVIEW"] = wxString::FromUTF8("Обзор");
         dictionary["RU"]["TAB_CONNECTIONS"] = wxString::FromUTF8("Подключения");
-        dictionary["RU"]["TAB_LOGS"] = wxString::FromUTF8("Логи");
+        dictionary["RU"]["TAB_LOGS"] = wxString::FromUTF8("Журналы");
+        
+        dictionary["RU"]["KNOWLEDGE_BASE"] = wxString::FromUTF8("База Знаний");
+        dictionary["RU"]["KNOWLEDGE_SUB"] = wxString::FromUTF8("Просмотр и редактирование модели инфраструктуры (Digital Twin).");
+        dictionary["RU"]["SAVE_CHANGES"] = wxString::FromUTF8("Сохранить изменения");
+        dictionary["RU"]["BTN_KNOWLEDGE"] = wxString::FromUTF8("Знания");
         dictionary["RU"]["SYSTEM_LOAD"] = wxString::FromUTF8("СИСТЕМНАЯ НАГРУЗКА");
         dictionary["RU"]["LOCAL_SERVER_COMBO"] = wxString::FromUTF8("Локальный сервер");
         dictionary["RU"]["CPU_LABEL"] = wxString::FromUTF8("ЦП: 0%");

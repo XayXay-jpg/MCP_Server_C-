@@ -891,12 +891,11 @@ void Windows::SetupUI() {
     knowledgeContainer->SetBackgroundColour(wxColour("#0A0A0B")); // Dark sleek UI
     
     wxBoxSizer* knowledgeSizer = new wxBoxSizer(wxVERTICAL);
-    
-    lblKnowledgeHeader = new wxStaticText(knowledgeContainer, wxID_ANY, "Knowledge Base");
+    lblKnowledgeHeader = new wxStaticText(knowledgeContainer, wxID_ANY, lang.GetString("KNOWLEDGE_BASE"));
     lblKnowledgeHeader->SetFont(wxFont(24, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
     lblKnowledgeHeader->SetForegroundColour(wxColour("#FFFFFF"));
     
-    wxStaticText* lblKnowledgeSub = new wxStaticText(knowledgeContainer, wxID_ANY, "View and edit the AI Digital Twin infrastructure model.");
+    wxStaticText* lblKnowledgeSub = new wxStaticText(knowledgeContainer, wxID_ANY, lang.GetString("KNOWLEDGE_SUB"));
     lblKnowledgeSub->SetForegroundColour(wxColour("#A1A1AA"));
     
     knowledgeSizer->Add(lblKnowledgeHeader, 0, wxALL, 20);
@@ -910,25 +909,58 @@ void Windows::SetupUI() {
     listKnowledgeSections->SetForegroundColour(wxColour("#FFFFFF"));
     listKnowledgeSections->SetFont(wxFont(11, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
     
-    // Right pane: JSON Editor
+    // Right pane: Auto & Manual Data
     wxBoxSizer* rightPaneSizer = new wxBoxSizer(wxVERTICAL);
-    txtKnowledgeData = new wxTextCtrl(knowledgeContainer, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxBORDER_NONE);
-    txtKnowledgeData->SetBackgroundColour(wxColour("#141416"));
+    
+    // Auto-data Panel (Read-only)
+    wxPanel* autoDataPanel = new wxPanel(knowledgeContainer, wxID_ANY);
+    autoDataPanel->SetBackgroundColour(wxColour("#141416")); // Card background
+    wxBoxSizer* autoDataSizer = new wxBoxSizer(wxVERTICAL);
+    
+    wxStaticText* lblAutoData = new wxStaticText(autoDataPanel, wxID_ANY, "AUTO-DISCOVERED STATE");
+    lblAutoData->SetForegroundColour(wxColour("#A1A1AA"));
+    lblAutoData->SetFont(wxFont(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
+    
+    txtKnowledgeAutoData = new wxTextCtrl(autoDataPanel, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 150), wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
+    txtKnowledgeAutoData->SetBackgroundColour(wxColour("#141416"));
+    txtKnowledgeAutoData->SetForegroundColour(wxColour("#A1A1AA")); // Muted color for read-only
+    txtKnowledgeAutoData->SetFont(wxFont(10, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+    
+    autoDataSizer->Add(lblAutoData, 0, wxALL, 15);
+    autoDataSizer->Add(txtKnowledgeAutoData, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 15);
+    autoDataPanel->SetSizer(autoDataSizer);
+
+    // Manual Data Panel (Editable)
+    wxPanel* manualDataPanel = new wxPanel(knowledgeContainer, wxID_ANY);
+    manualDataPanel->SetBackgroundColour(wxColour("#18181B")); // Slightly different background
+    wxBoxSizer* manualDataSizer = new wxBoxSizer(wxVERTICAL);
+    
+    wxStaticText* lblManualData = new wxStaticText(manualDataPanel, wxID_ANY, "MANUAL ANNOTATIONS");
+    lblManualData->SetForegroundColour(wxColour("#A1A1AA"));
+    lblManualData->SetFont(wxFont(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
+
+    txtKnowledgeData = new wxTextCtrl(manualDataPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxBORDER_NONE);
+    txtKnowledgeData->SetBackgroundColour(wxColour("#18181B"));
     txtKnowledgeData->SetForegroundColour(wxColour("#E5E7EB"));
     txtKnowledgeData->SetFont(wxFont(10, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL)); // Monospace font for JSON
     
-    btnKnowledgeSave = new CustomButton(knowledgeContainer, ID_BTN_KNOWLEDGE_SAVE, "Save Changes");
+    btnKnowledgeSave = new CustomButton(manualDataPanel, ID_BTN_KNOWLEDGE_SAVE, lang.GetString("SAVE_CHANGES"));
     btnKnowledgeSave->SetBackgroundColour(wxColour("#4F46E5")); // Sleek primary color
     btnKnowledgeSave->SetForegroundColour(wxColour("#FFFFFF"));
     btnKnowledgeSave->SetFont(btnFont);
+
+    manualDataSizer->Add(lblManualData, 0, wxALL, 15);
+    manualDataSizer->Add(txtKnowledgeData, 1, wxEXPAND | wxLEFT | wxRIGHT, 15);
+    manualDataSizer->Add(btnKnowledgeSave, 0, wxALIGN_RIGHT | wxALL, 15);
+    manualDataPanel->SetSizer(manualDataSizer);
+
+    rightPaneSizer->Add(autoDataPanel, 0, wxEXPAND | wxBOTTOM, 20); // Fixed height
+    rightPaneSizer->Add(manualDataPanel, 1, wxEXPAND); // Fills remaining space
     
-    rightPaneSizer->Add(txtKnowledgeData, 1, wxEXPAND | wxBOTTOM, 10);
-    rightPaneSizer->Add(btnKnowledgeSave, 0, wxALIGN_RIGHT);
-    
-    knowledgeSplitSizer->Add(listKnowledgeSections, 0, wxEXPAND | wxRIGHT, 15);
+    knowledgeSplitSizer->Add(listKnowledgeSections, 0, wxEXPAND | wxRIGHT, 20);
     knowledgeSplitSizer->Add(rightPaneSizer, 1, wxEXPAND);
     
-    knowledgeSizer->Add(knowledgeSplitSizer, 1, wxEXPAND | wxALL, 20);
+    knowledgeSizer->Add(knowledgeSplitSizer, 1, wxEXPAND | wxALL, 30);
     knowledgeContainer->SetSizer(knowledgeSizer);
     rootBook->AddPage(knowledgeContainer, "KnowledgeContainer");
     // ---------------------------------
@@ -1330,8 +1362,8 @@ void Windows::UpdateLanguage() {
     btnServerLocal->SetLabel(compact ? "" : lang.GetString("SERVER_LOCAL"));
     btnCluster->SetLabel(compact ? "" : lang.GetString("CLUSTER_NODES"));
     btnTools->SetLabel(compact ? "" : lang.GetString("TOOLS"));
-    btnKnowledge->SetLabel(compact ? "" : "Knowledge");
-    btnGlobalSettings->SetLabel(compact ? "" : lang.GetString("SETTINGS"));
+    btnKnowledge->SetLabel(compact ? "" : lang.GetString("BTN_KNOWLEDGE"));
+    btnGlobalSettings->SetLabel(compact ? "" : lang.GetString("GLOBAL_SETTINGS"));
     
     btnTabOverview->SetLabel(lang.GetString("TAB_OVERVIEW"));
     btnTabConnections->SetLabel(lang.GetString("TAB_CONNECTIONS"));
@@ -1474,6 +1506,7 @@ void Windows::OnSidebarKnowledge(wxCommandEvent& event) {
     for (const auto& s : sections) {
         listKnowledgeSections->Append(s);
     }
+    txtKnowledgeAutoData->Clear();
     txtKnowledgeData->Clear();
 }
 
@@ -1481,8 +1514,29 @@ void Windows::OnKnowledgeSectionSelect(wxCommandEvent& event) {
     int sel = listKnowledgeSections->GetSelection();
     if (sel != wxNOT_FOUND) {
         std::string section = listKnowledgeSections->GetString(sel).ToStdString();
+        
+        // Auto-discovered data logic
+        nlohmann::json autoData = nlohmann::json::object();
+        if (section == "server") {
+            autoData["hostname"] = wxGetHostName().ToStdString();
+            autoData["os_description"] = wxGetOsDescription().ToStdString();
+            autoData["user_id"] = wxGetUserId().ToStdString();
+            autoData["free_memory_mb"] = wxGetFreeMemory().ToDouble() / (1024 * 1024);
+        } else if (section == "services") {
+            autoData["active_sessions"] = g_active_sessions.load();
+            autoData["tool_calls"] = g_tool_calls.load();
+        } else {
+            autoData["info"] = "No auto-discovered data available for this section.";
+        }
+        txtKnowledgeAutoData->SetValue(autoData.dump(4));
+        
+        // Manual annotations logic
         nlohmann::json data = KnowledgeLayer::GetInstance().GetSection(section);
-        txtKnowledgeData->SetValue(data.dump(4));
+        if (data.is_null() || data.empty()) {
+            txtKnowledgeData->SetValue("{\n    // Add your " + section + " information here\n    \n}");
+        } else {
+            txtKnowledgeData->SetValue(data.dump(4));
+        }
     }
 }
 
@@ -2492,8 +2546,8 @@ void Windows::OnToggleCompact(wxCommandEvent& event) {
         btnServerLocal->SetLabel(lang.GetString("SERVER_LOCAL"));
         btnCluster->SetLabel(lang.GetString("CLUSTER_NODES"));
         btnTools->SetLabel(lang.GetString("TOOLS"));
-        btnKnowledge->SetLabel("Knowledge");
-        btnGlobalSettings->SetLabel(lang.GetString("SETTINGS"));
+        btnKnowledge->SetLabel(lang.GetString("BTN_KNOWLEDGE"));
+        btnGlobalSettings->SetLabel(lang.GetString("GLOBAL_SETTINGS"));
         btnServerLocal->SetIndent(15);
         btnCluster->SetIndent(15);
         btnTools->SetIndent(15);
