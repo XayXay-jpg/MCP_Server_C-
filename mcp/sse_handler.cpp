@@ -35,3 +35,14 @@ void notify_tools_changed() {
         }
     }
 }
+
+int get_sessions_for_token(const std::string& token_id) {
+    std::lock_guard<std::mutex> lock(sessions_mutex);
+    int count = 0;
+    for (const auto& [id, session] : active_sessions) {
+        if (session->active && session->token_id == token_id) {
+            count++;
+        }
+    }
+    return count;
+}

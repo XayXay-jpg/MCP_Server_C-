@@ -219,6 +219,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
             auto tokens = NetworkUtils::LoadTokens();
             for (const auto& t : tokens) {
                 if (t.raw_token == token_provided) {
+                    session->token_id = t.id;
                     token_display = t.name.empty() ? t.id : t.name;
                     std::string masked = t.raw_token.length() > 8 ? 
                         (t.raw_token.substr(0, 4) + "..." + t.raw_token.substr(t.raw_token.length() - 4)) : "***";

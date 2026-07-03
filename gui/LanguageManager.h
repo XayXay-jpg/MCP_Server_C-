@@ -114,7 +114,6 @@ private:
         dictionary["EN"]["SECTION_NOTES"] = wxString::FromUTF8("Notes");
         dictionary["EN"]["SECTION_POLICIES"] = wxString::FromUTF8("Policies");
         dictionary["EN"]["SECTION_SERVER"] = wxString::FromUTF8("Server Info");
-        dictionary["EN"]["SECTION_SERVICES"] = wxString::FromUTF8("Services");
         dictionary["EN"]["SECTION_WORKFLOW"] = wxString::FromUTF8("Workflows");
         
         dictionary["EN"]["DESC_APPLICATIONS"] = wxString::FromUTF8("Track running applications, containers, and databases.");
@@ -123,7 +122,6 @@ private:
         dictionary["EN"]["DESC_NOTES"] = wxString::FromUTF8("Free-form scratchpad for the AI and administrators.");
         dictionary["EN"]["DESC_POLICIES"] = wxString::FromUTF8("Security policies, operational rules, and access constraints.");
         dictionary["EN"]["DESC_SERVER"] = wxString::FromUTF8("Core hardware and operating system specifications.");
-        dictionary["EN"]["DESC_SERVICES"] = wxString::FromUTF8("Status of internal MCP services and active tool sessions.");
         dictionary["EN"]["DESC_WORKFLOW"] = wxString::FromUTF8("Standard operating procedures and active task pipelines.");
         
         dictionary["EN"]["SAVE_CHANGES"] = wxString::FromUTF8("Save Changes");
@@ -139,6 +137,8 @@ private:
         dictionary["EN"]["COL_ID"] = wxString::FromUTF8("ID");
         dictionary["EN"]["COL_TOKEN"] = wxString::FromUTF8("Token");
         dictionary["EN"]["COL_CREATED"] = wxString::FromUTF8("Created");
+        dictionary["EN"]["COL_STATUS"] = wxString::FromUTF8("Status");
+        dictionary["EN"]["COL_SESSIONS"] = wxString::FromUTF8("Sessions");
         
         dictionary["EN"]["BTN_CREATE_TOKEN"] = wxString::FromUTF8("Create Token");
         dictionary["EN"]["BTN_DELETE_TOKEN"] = wxString::FromUTF8("Delete Token");
@@ -275,7 +275,6 @@ private:
         dictionary["RU"]["SECTION_NOTES"] = wxString::FromUTF8("Заметки");
         dictionary["RU"]["SECTION_POLICIES"] = wxString::FromUTF8("Политики");
         dictionary["RU"]["SECTION_SERVER"] = wxString::FromUTF8("О Сервере");
-        dictionary["RU"]["SECTION_SERVICES"] = wxString::FromUTF8("Службы");
         dictionary["RU"]["SECTION_WORKFLOW"] = wxString::FromUTF8("Рабочие процессы");
         
         dictionary["RU"]["DESC_APPLICATIONS"] = wxString::FromUTF8("Отслеживание запущенных приложений, контейнеров и баз данных.");
@@ -284,7 +283,6 @@ private:
         dictionary["RU"]["DESC_NOTES"] = wxString::FromUTF8("Свободные заметки для искусственного интеллекта и администраторов.");
         dictionary["RU"]["DESC_POLICIES"] = wxString::FromUTF8("Политики безопасности, операционные правила и ограничения доступа.");
         dictionary["RU"]["DESC_SERVER"] = wxString::FromUTF8("Основные аппаратные характеристики и данные об ОС.");
-        dictionary["RU"]["DESC_SERVICES"] = wxString::FromUTF8("Статус внутренних служб MCP и активных сессий инструментов.");
         dictionary["RU"]["DESC_WORKFLOW"] = wxString::FromUTF8("Стандартные рабочие процедуры и конвейеры задач.");
         
         dictionary["RU"]["SAVE_CHANGES"] = wxString::FromUTF8("Сохранить изменения");
@@ -300,6 +298,8 @@ private:
         dictionary["RU"]["COL_TOKEN"] = wxString::FromUTF8("Токен");
         dictionary["RU"]["COL_CREATED"] = wxString::FromUTF8("Создан");
         dictionary["RU"]["COL_STATUS"] = wxString::FromUTF8("Статус");
+        dictionary["RU"]["COL_SESSIONS"] = wxString::FromUTF8("Сессии");
+        dictionary["RU"]["COL_SESSIONS"] = wxString::FromUTF8("Сессии");
         
         dictionary["RU"]["BTN_CREATE_TOKEN"] = wxString::FromUTF8("Создать Токен");
         dictionary["RU"]["BTN_DELETE_TOKEN"] = wxString::FromUTF8("Удалить Токен");

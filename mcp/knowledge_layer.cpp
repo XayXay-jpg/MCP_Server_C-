@@ -25,7 +25,7 @@ void KnowledgeLayer::Load(const std::string& workspace_dir) {
     
     // Ensure default sections exist
     std::vector<std::string> default_sections = {
-        "server", "services", "applications", "policies", 
+        "server", "applications", "policies", 
         "workflow", "incidents", "notes", "cluster"
     };
     

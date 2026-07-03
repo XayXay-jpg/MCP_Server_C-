@@ -14,6 +14,7 @@ struct Session {
     std::mutex mtx;
     std::condition_variable cv;
     bool active = true;
+    std::string token_id = ""; // ID of the token used to authenticate
 };
 
 extern std::mutex sessions_mutex;
@@ -21,3 +22,4 @@ extern std::map<std::string, std::shared_ptr<Session>> active_sessions;
 
 void send_to_session(const std::string& session_id, const nlohmann::json& response);
 void notify_tools_changed();
+int get_sessions_for_token(const std::string& token_id);

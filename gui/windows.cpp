@@ -7,6 +7,7 @@
 #include "../mcp/settings_manager.h"
 #include "../mcp/cluster_manager.h"
 #include "../mcp/knowledge_layer.h"
+#include "../mcp/sse_handler.h"
 #include "../mcp/auto_discovery.h"
 #include <nlohmann/json.hpp>
 #include "icons.h"
@@ -626,17 +627,19 @@ void Windows::SetupUI() {
     lblTokenTitle->SetForegroundColour(wxColour("#A1A1AA"));
     
     gridTokens = new wxGrid(pageConnections, wxID_ANY, wxDefaultPosition, wxSize(-1, 150));
-    gridTokens->CreateGrid(0, 5);
+    gridTokens->CreateGrid(0, 6);
     gridTokens->SetColLabelValue(0, lang.GetString("COL_NAME"));
     gridTokens->SetColLabelValue(1, lang.GetString("COL_ID"));
     gridTokens->SetColLabelValue(2, lang.GetString("COL_TOKEN"));
     gridTokens->SetColLabelValue(3, lang.GetString("COL_CREATED"));
     gridTokens->SetColLabelValue(4, lang.GetString("COL_STATUS"));
+    gridTokens->SetColLabelValue(5, lang.GetString("COL_SESSIONS"));
     gridTokens->SetColSize(0, 120);
     gridTokens->SetColSize(1, 150);
     gridTokens->SetColSize(2, 200);
     gridTokens->SetColSize(3, 160);
     gridTokens->SetColSize(4, 80);
+    gridTokens->SetColSize(5, 80);
     gridTokens->HideRowLabels();
     gridTokens->DisableDragColSize();
     gridTokens->DisableDragRowSize();
@@ -1546,9 +1549,6 @@ void Windows::OnKnowledgeSectionSelect(wxCommandEvent& event) {
             autoData["free_memory_mb"] = wxGetFreeMemory().ToDouble() / (1024 * 1024);
             autoData["cpu_cores"] = wxThread::GetCPUCount();
             autoData["workspace_dir"] = wxGetCwd().ToStdString();
-        } else if (section == "services") {
-            autoData["active_sessions"] = g_active_sessions.load();
-            autoData["tool_calls"] = g_tool_calls.load();
         } else if (section == "cluster") {
             auto nodes = ClusterManager::GetInstance().GetNodes();
             autoData["total_nodes"] = nodes.size();
@@ -2039,10 +2039,13 @@ void Windows::RefreshTokenList() {
         }
         gridTokens->SetCellValue(i, 3, t.creation_date);
         gridTokens->SetCellValue(i, 4, t.active ? "Active" : "Revoked");
+        int sessions = get_sessions_for_token(t.id);
+        gridTokens->SetCellValue(i, 5, wxString::Format("%d", sessions));
         
-        // Readonly for created and status
+        // Readonly for created, status, sessions
         gridTokens->SetReadOnly(i, 3, true);
         gridTokens->SetReadOnly(i, 4, true);
+        gridTokens->SetReadOnly(i, 5, true);
         
         if (!t.active) {
             gridTokens->SetCellTextColour(i, 4, wxColour("#D62828"));
