@@ -32,3 +32,50 @@ target_link_libraries(mcp_manager PRIVATE
     OpenSSL::Crypto
     ${wxWidgets_LIBRARIES}
 )
+
+# ==========================================
+# Install & CPack Configuration
+# ==========================================
+include(GNUInstallDirs)
+
+# Install executable
+install(TARGETS mcp_manager
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    BUNDLE DESTINATION .
+)
+
+# Install icons (for Linux)
+install(DIRECTORY icons DESTINATION ${CMAKE_INSTALL_DATADIR}/mcp_server_manager)
+
+# Linux desktop file (if building on Linux)
+if(UNIX AND NOT APPLE)
+    install(FILES linux/mcp-server-manager.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+    install(FILES icons/logo.png DESTINATION ${CMAKE_INSTALL_DATADIR}/pixmaps RENAME mcp-server-manager.png)
+endif()
+
+# CPack settings
+set(CPACK_PACKAGE_NAME "mcp-server-manager")
+set(CPACK_PACKAGE_VENDOR "MCP Team")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "MCP Server Manager C++ Application")
+set(CPACK_PACKAGE_VERSION_MAJOR "1")
+set(CPACK_PACKAGE_VERSION_MINOR "0")
+set(CPACK_PACKAGE_VERSION_PATCH "0")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "mcp-server-manager")
+
+# Generator settings
+if(WIN32)
+    set(CPACK_GENERATOR "NSIS;ZIP")
+    set(CPACK_NSIS_MODIFY_PATH ON)
+    set(CPACK_NSIS_INSTDIR_REGKEY "Software\\\\MCP_Server_Manager")
+elseif(APPLE)
+    set(CPACK_GENERATOR "DragNDrop")
+    set_target_properties(mcp_manager PROPERTIES MACOSX_BUNDLE TRUE)
+elseif(UNIX)
+    set(CPACK_GENERATOR "DEB")
+    # Using generic depends, on Ubuntu usually libwxgtk3.2-1t64 or similar, libssl3 or libssl1.1
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libwxgtk3.2-1t64 | libwxgtk3.0-gtk3-0v5, libssl3 | libssl1.1")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Developer")
+    set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
+endif()
+
+include(CPack)

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=MCP Server Manager
+Comment=Manage MCP Multi-Node Clusters
+Exec=mcp_manager
+Icon=mcp-server-manager
+Terminal=false
+Type=Application
+Categories=Utility;Development;
+StartupNotify=true

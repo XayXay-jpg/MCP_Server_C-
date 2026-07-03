@@ -24,3 +24,15 @@ Thumbs.db
 
 # Frontend Design Skills (Do not commit)
 Frontend-Design-SKILLS-for-AI/
+
+# Installers and Packages
+*.deb
+*.rpm
+*.dmg
+*.pkg
+*.exe
+*.msi
+*.AppImage
+_CPack_Packages/
+CPackConfig.cmake
+CPackSourceConfig.cmake

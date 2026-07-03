@@ -1,0 +1,99 @@
+name: Build Cross-Platform Installers
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Dependencies (vcpkg)
+        run: |
+          vcpkg install wxwidgets:x64-windows openssl:x64-windows
+          vcpkg integrate install
+
+      - name: Build and Package
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake" -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --config Release
+          cpack -C Release
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-installer
+          path: build/*.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwxgtk3.2-dev libssl-dev cmake build-essential
+
+      - name: Build and Package
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          make -j$(nproc)
+          cpack
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-installer
+          path: build/*.deb
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Dependencies
+        run: |
+          brew install wxwidgets openssl
+
+      - name: Build and Package
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DOPENSSL_ROOT_DIR=$(brew --prefix openssl)
+          make -j$(sysctl -n hw.ncpu)
+          cpack
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-installer
+          path: build/*.dmg
+
+  release:
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/windows-installer/*.exe
+            artifacts/linux-installer/*.deb
+            artifacts/macos-installer/*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
