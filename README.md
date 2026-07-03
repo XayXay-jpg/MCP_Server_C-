@@ -114,6 +114,32 @@ All other C++ dependencies (`nlohmann/json`, `cpp-httplib`) are automatically fe
 
 ---
 
+### Running the Release Binaries (No compilation required)
+
+If you downloaded the pre-compiled binaries from the **Releases** page, you don't need to install CMake or a compiler.
+
+#### Linux
+1. Download `MCP_Server_Linux_x64.tar.gz`.
+2. Extract it: `tar -xvf MCP_Server_Linux_x64.tar.gz`
+3. Make it executable (if it isn't already): `chmod +x mcp_manager`
+4. Run it: `./mcp_manager`
+
+*(Make sure you have `wxWidgets` installed on your system: `sudo apt install libwxgtk3.2-1` on Ubuntu/Debian).*
+
+#### macOS
+1. Download `MCP_Server_macOS_ARM64.tar.gz`.
+2. Extract the archive.
+3. Open Terminal, navigate to the extracted folder, and run: `./mcp_manager`
+*(You might need to allow execution in System Settings > Privacy & Security if macOS blocks it).*
+
+#### Windows
+1. Download `MCP_Server_Windows_x64.zip`.
+2. Extract the folder (do not run the `.exe` directly from inside the zip).
+3. Double-click `mcp_manager.exe`.
+*(All required DLLs are already included in the folder).*
+
+---
+
 ### Usage
 
 1. Launch the `mcp_manager` executable.
@@ -244,6 +270,32 @@ cmake --build . --config Release --parallel
 ```
 
 Зависимости C++ (`nlohmann/json`, `cpp-httplib`) загружаются автоматически при конфигурировании CMake.
+
+---
+
+### Запуск готовых бинарников (без компиляции)
+
+Если вы скачали готовые сборки со страницы **Releases**, вам не нужно устанавливать компилятор или CMake.
+
+#### Linux
+1. Скачайте `MCP_Server_Linux_x64.tar.gz`.
+2. Распакуйте архив: `tar -xvf MCP_Server_Linux_x64.tar.gz`
+3. Сделайте файл исполняемым: `chmod +x mcp_manager`
+4. Запустите: `./mcp_manager`
+
+*(Убедитесь, что в системе установлена библиотека `wxWidgets`: `sudo apt install libwxgtk3.2-1` для Ubuntu/Debian).*
+
+#### macOS
+1. Скачайте `MCP_Server_macOS_ARM64.tar.gz`.
+2. Распакуйте архив.
+3. Откройте Терминал, перейдите в папку с файлом и запустите: `./mcp_manager`
+*(Возможно, потребуется разрешить запуск в Системных настройках > Конфиденциальность и безопасность).*
+
+#### Windows
+1. Скачайте `MCP_Server_Windows_x64.zip`.
+2. Распакуйте папку (не запускайте `.exe` прямо из архива).
+3. Запустите `mcp_manager.exe`.
+*(Все необходимые DLL-библиотеки уже включены в папку).*
 
 ---
 
