@@ -101,18 +101,22 @@ SystemStats GetSystemStats() {
     std::string result;
     std::unique_ptr<FILE, decltype(&pclose)> pipe(popen("nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null", "r"), pclose);
     if (pipe) {
+        unsigned long long totalUsedMB = 0;
+        unsigned long long totalMaxMB = 0;
+        bool foundGpu = false;
         while (fgets(sysbuf.data(), sysbuf.size(), pipe.get()) != nullptr) {
-            result += sysbuf.data();
-        }
-        
-        unsigned long long vramUsedMB = 0, vramTotalMB = 0;
-        if (sscanf(result.c_str(), "%llu, %llu", &vramUsedMB, &vramTotalMB) == 2) {
-            stats.vramUsedGB = vramUsedMB / 1024.0;
-            stats.vramTotalGB = vramTotalMB / 1024.0;
-            if (vramTotalMB > 0) {
-                stats.vramPercent = (double)vramUsedMB / vramTotalMB * 100.0;
-                stats.hasVRAM = true;
+            unsigned long long u = 0, t = 0;
+            if (sscanf(sysbuf.data(), "%llu, %llu", &u, &t) == 2) {
+                totalUsedMB += u;
+                totalMaxMB += t;
+                foundGpu = true;
             }
+        }
+        if (foundGpu && totalMaxMB > 0) {
+            stats.vramUsedGB = totalUsedMB / 1024.0;
+            stats.vramTotalGB = totalMaxMB / 1024.0;
+            stats.vramPercent = (double)totalUsedMB / totalMaxMB * 100.0;
+            stats.hasVRAM = true;
         }
     }
 
@@ -210,6 +214,103 @@ SystemStats GetSystemStats() {
             stats.diskUsedGB  = used  / (1024.0 * 1024.0 * 1024.0);
             if (total > 0)
                 stats.diskPercent = stats.diskUsedGB / stats.diskTotalGB * 100.0;
+        }
+    }
+
+    return stats;
+}
+
+#elif defined(_WIN32)
+
+#include <windows.h>
+#include <array>
+#include <string>
+#include <memory>
+
+static FILE* popen_win(const char* command, const char* mode) {
+    return _popen(command, mode);
+}
+static int pclose_win(FILE* file) {
+    return _pclose(file);
+}
+
+static unsigned long long FileTimeToULL(const FILETIME& ft) {
+    ULARGE_INTEGER uli;
+    uli.LowPart = ft.dwLowDateTime;
+    uli.HighPart = ft.dwHighDateTime;
+    return uli.QuadPart;
+}
+
+static unsigned long long prevTotalTime = 0;
+static unsigned long long prevIdleTime = 0;
+
+SystemStats GetSystemStats() {
+    SystemStats stats = {};
+    stats.hasVRAM = false;
+
+    // 1. CPU Usage
+    FILETIME idleTime, kernelTime, userTime;
+    if (GetSystemTimes(&idleTime, &kernelTime, &userTime)) {
+        unsigned long long idle = FileTimeToULL(idleTime);
+        unsigned long long kernel = FileTimeToULL(kernelTime);
+        unsigned long long user = FileTimeToULL(userTime);
+        unsigned long long total = kernel + user;
+
+        if (prevTotalTime != 0) {
+            unsigned long long diffTotal = total - prevTotalTime;
+            unsigned long long diffIdle = idle - prevIdleTime;
+            if (diffTotal > 0) {
+                stats.cpuPercent = (double)(diffTotal - diffIdle) / diffTotal * 100.0;
+            }
+        }
+        prevTotalTime = total;
+        prevIdleTime = idle;
+    }
+
+    // 2. RAM Usage
+    MEMORYSTATUSEX memInfo;
+    memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+    if (GlobalMemoryStatusEx(&memInfo)) {
+        stats.ramTotalGB = memInfo.ullTotalPhys / (1024.0 * 1024.0 * 1024.0);
+        unsigned long long usedRam = memInfo.ullTotalPhys - memInfo.ullAvailPhys;
+        stats.ramUsedGB = usedRam / (1024.0 * 1024.0 * 1024.0);
+        if (stats.ramTotalGB > 0) {
+            stats.ramPercent = (stats.ramUsedGB / stats.ramTotalGB) * 100.0;
+        }
+    }
+
+    // 3. Disk Usage (C:\ drive)
+    ULARGE_INTEGER freeBytesAvailable, totalNumberOfBytes, totalNumberOfFreeBytes;
+    if (GetDiskFreeSpaceExA("C:\\", &freeBytesAvailable, &totalNumberOfBytes, &totalNumberOfFreeBytes)) {
+        stats.diskTotalGB = totalNumberOfBytes.QuadPart / (1024.0 * 1024.0 * 1024.0);
+        unsigned long long usedDisk = totalNumberOfBytes.QuadPart - totalNumberOfFreeBytes.QuadPart;
+        stats.diskUsedGB = usedDisk / (1024.0 * 1024.0 * 1024.0);
+        if (stats.diskTotalGB > 0) {
+            stats.diskPercent = (stats.diskUsedGB / stats.diskTotalGB) * 100.0;
+        }
+    }
+
+    // 4. VRAM Usage (via nvidia-smi)
+    std::array<char, 128> sysbuf;
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose_win)> pipe(popen_win("nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits 2>nul", "r"), pclose_win);
+    if (pipe) {
+        unsigned long long totalUsedMB = 0;
+        unsigned long long totalMaxMB = 0;
+        bool foundGpu = false;
+        while (fgets(sysbuf.data(), sysbuf.size(), pipe.get()) != nullptr) {
+            unsigned long long u = 0, t = 0;
+            if (sscanf(sysbuf.data(), "%llu, %llu", &u, &t) == 2) {
+                totalUsedMB += u;
+                totalMaxMB += t;
+                foundGpu = true;
+            }
+        }
+        if (foundGpu && totalMaxMB > 0) {
+            stats.vramUsedGB = totalUsedMB / 1024.0;
+            stats.vramTotalGB = totalMaxMB / 1024.0;
+            stats.vramPercent = (double)totalUsedMB / totalMaxMB * 100.0;
+            stats.hasVRAM = true;
         }
     }
 
