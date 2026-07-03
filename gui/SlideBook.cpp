@@ -83,7 +83,7 @@ void SlideBook::OnSize(wxSizeEvent& event) {
 void SlideBook::OnAnimTimer(wxTimerEvent& event) {
     if (m_progress >= 1.0) return;
     
-    m_progress += 0.025; // completes in 40 frames (640ms at 60fps)
+    m_progress += 0.1; // completes in 10 frames (160ms at 60fps)
     if (m_progress >= 1.0) {
         m_progress = 1.0;
         m_animTimer->Stop();

@@ -369,7 +369,7 @@ void Windows::SetupUI() {
     wxBitmap clusterIcon = GetBitmapFromBase64(icon_cluster_png_base64);
     wxBitmap settingsIcon = GetBitmapFromBase64(icon_settings_new_png_base64);
     wxBitmap toolsIcon = GetBitmapFromBase64(icon_tools_png_base64);
-    wxBitmap bookIcon = GetBitmapFromBase64(icon_book_png_base64);
+    wxBitmap bookIcon = GetBitmapFromBase64(icon_app_png_base64);
     
     btnServerLocal->SetIcon(serverIcon);
     btnCluster->SetIcon(clusterIcon);
@@ -1255,7 +1255,7 @@ void Windows::ApplyTheme() {
     btnServerLocal->SetIcon(RecolorIconBmp(icon_server_png_base64, iconColor));
     btnCluster->SetIcon(RecolorIconBmp(icon_cluster_png_base64, iconColor));
     btnTools->SetIcon(RecolorIconBmp(icon_tools_png_base64, iconColor));
-    btnKnowledge->SetIcon(RecolorIconBmp(icon_book_png_base64, iconColor));
+    btnKnowledge->SetIcon(RecolorIconBmp(icon_app_png_base64, iconColor));
     btnGlobalSettings->SetIcon(RecolorIconBmp(icon_settings_png_base64, iconColor));
     
     btnTabOverview->SetBackgroundColour(transparentBg);
