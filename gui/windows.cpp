@@ -900,7 +900,12 @@ void Windows::SetupUI() {
     lblKnowledgeSub->SetForegroundColour(wxColour("#A1A1AA"));
     
     knowledgeSizer->Add(lblKnowledgeHeader, 0, wxALL, 20);
-    knowledgeSizer->Add(lblKnowledgeSub, 0, wxLEFT | wxRIGHT | wxBOTTOM, 20);
+    knowledgeSizer->Add(lblKnowledgeSub, 0, wxLEFT | wxRIGHT, 20);
+    
+    lblKnowledgeSectionDesc = new wxStaticText(knowledgeContainer, wxID_ANY, "");
+    lblKnowledgeSectionDesc->SetForegroundColour(wxColour("#4F46E5")); // Accent color for the section description
+    lblKnowledgeSectionDesc->SetFont(wxFont(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_ITALIC, wxFONTWEIGHT_NORMAL));
+    knowledgeSizer->Add(lblKnowledgeSectionDesc, 0, wxLEFT | wxRIGHT | wxBOTTOM, 20);
     
     wxBoxSizer* knowledgeSplitSizer = new wxBoxSizer(wxHORIZONTAL);
     
@@ -1508,7 +1513,10 @@ void Windows::OnSidebarKnowledge(wxCommandEvent& event) {
     listKnowledgeSections->Clear();
     auto sections = KnowledgeLayer::GetInstance().GetSections();
     for (const auto& s : sections) {
-        listKnowledgeSections->Append(s);
+        wxString key = "SECTION_" + wxString(s).Upper();
+        wxString localizedName = LanguageManager::Get().GetString(key.ToStdString());
+        if (localizedName == key) localizedName = wxString(s); // Fallback to raw key
+        listKnowledgeSections->Append(localizedName, new wxStringClientData(s));
     }
     txtKnowledgeAutoData->Clear();
     txtKnowledgeData->Clear();
@@ -1517,8 +1525,18 @@ void Windows::OnSidebarKnowledge(wxCommandEvent& event) {
 void Windows::OnKnowledgeSectionSelect(wxCommandEvent& event) {
     int sel = listKnowledgeSections->GetSelection();
     if (sel != wxNOT_FOUND) {
-        std::string section = listKnowledgeSections->GetString(sel).ToStdString();
+        wxStringClientData* clientData = (wxStringClientData*)listKnowledgeSections->GetClientObject(sel);
+        if (!clientData) return;
+        std::string section = clientData->GetData().ToStdString();
         
+        // Update description label
+        wxString descKey = "DESC_" + wxString(section).Upper();
+        wxString localizedDesc = LanguageManager::Get().GetString(descKey.ToStdString());
+        if (localizedDesc == descKey) localizedDesc = "";
+        if (lblKnowledgeSectionDesc) {
+            lblKnowledgeSectionDesc->SetLabel(localizedDesc);
+            lblKnowledgeSectionDesc->GetParent()->Layout();
+        }
         // Auto-discovered data logic
         nlohmann::json autoData = nlohmann::json::object();
         if (section == "server") {

@@ -99,6 +99,7 @@ private:
     
     wxPanel* knowledgeContainer;
     wxStaticText* lblKnowledgeHeader = nullptr;
+    wxStaticText* lblKnowledgeSectionDesc = nullptr;
     wxListBox* listKnowledgeSections = nullptr;
     wxTextCtrl* txtKnowledgeAutoData = nullptr; // New auto-data panel
     wxTextCtrl* txtKnowledgeData = nullptr;

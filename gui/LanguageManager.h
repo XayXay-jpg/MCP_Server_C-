@@ -107,6 +107,25 @@ private:
         dictionary["EN"]["KNOWLEDGE_SUB"] = wxString::FromUTF8("View and edit the AI Digital Twin infrastructure model.");
         dictionary["EN"]["AUTO_DISCOVERED_STATE"] = wxString::FromUTF8("AUTO-DISCOVERED STATE");
         dictionary["EN"]["MANUAL_ANNOTATIONS"] = wxString::FromUTF8("MANUAL ANNOTATIONS");
+        
+        dictionary["EN"]["SECTION_APPLICATIONS"] = wxString::FromUTF8("Applications");
+        dictionary["EN"]["SECTION_CLUSTER"] = wxString::FromUTF8("Cluster Nodes");
+        dictionary["EN"]["SECTION_INCIDENTS"] = wxString::FromUTF8("Incidents");
+        dictionary["EN"]["SECTION_NOTES"] = wxString::FromUTF8("Notes");
+        dictionary["EN"]["SECTION_POLICIES"] = wxString::FromUTF8("Policies");
+        dictionary["EN"]["SECTION_SERVER"] = wxString::FromUTF8("Server Info");
+        dictionary["EN"]["SECTION_SERVICES"] = wxString::FromUTF8("Services");
+        dictionary["EN"]["SECTION_WORKFLOW"] = wxString::FromUTF8("Workflows");
+        
+        dictionary["EN"]["DESC_APPLICATIONS"] = wxString::FromUTF8("Track running applications, containers, and databases.");
+        dictionary["EN"]["DESC_CLUSTER"] = wxString::FromUTF8("Information about connected family nodes and cluster topology.");
+        dictionary["EN"]["DESC_INCIDENTS"] = wxString::FromUTF8("Log of recent errors, crashes, or security incidents.");
+        dictionary["EN"]["DESC_NOTES"] = wxString::FromUTF8("Free-form scratchpad for the AI and administrators.");
+        dictionary["EN"]["DESC_POLICIES"] = wxString::FromUTF8("Security policies, operational rules, and access constraints.");
+        dictionary["EN"]["DESC_SERVER"] = wxString::FromUTF8("Core hardware and operating system specifications.");
+        dictionary["EN"]["DESC_SERVICES"] = wxString::FromUTF8("Status of internal MCP services and active tool sessions.");
+        dictionary["EN"]["DESC_WORKFLOW"] = wxString::FromUTF8("Standard operating procedures and active task pipelines.");
+        
         dictionary["EN"]["SAVE_CHANGES"] = wxString::FromUTF8("Save Changes");
         dictionary["EN"]["BTN_KNOWLEDGE"] = wxString::FromUTF8("Knowledge");
         dictionary["EN"]["SYSTEM_LOAD"] = wxString::FromUTF8("SYSTEM LOAD");
@@ -175,6 +194,7 @@ private:
         dictionary["RU"]["LOGS"] = wxString::FromUTF8("ЛОГИ");
         dictionary["RU"]["SERVER_MANAGER"] = wxString::FromUTF8("МЕНЕДЖЕР MCP СЕРВЕРА");
         dictionary["RU"]["SERVER_LOCAL"] = wxString::FromUTF8("ЛОКАЛЬНЫЙ СЕРВЕР");
+        dictionary["RU"]["CLUSTER_NODES"] = wxString::FromUTF8("УЗЛЫ КЛАСТЕРА");
         dictionary["RU"]["CLUSTER"] = wxString::FromUTF8("СЕМЕЙНАЯ ГРУППА");
         dictionary["RU"]["TOOLS"] = wxString::FromUTF8("Инструменты");
         dictionary["RU"]["GLOBAL_SETTINGS"] = wxString::FromUTF8("НАСТРОЙКИ");
@@ -248,6 +268,25 @@ private:
         dictionary["RU"]["KNOWLEDGE_SUB"] = wxString::FromUTF8("Просмотр и редактирование модели инфраструктуры (Digital Twin).");
         dictionary["RU"]["AUTO_DISCOVERED_STATE"] = wxString::FromUTF8("АВТОМАТИЧЕСКИЕ ДАННЫЕ");
         dictionary["RU"]["MANUAL_ANNOTATIONS"] = wxString::FromUTF8("РУЧНЫЕ АННОТАЦИИ");
+        
+        dictionary["RU"]["SECTION_APPLICATIONS"] = wxString::FromUTF8("Приложения");
+        dictionary["RU"]["SECTION_CLUSTER"] = wxString::FromUTF8("Узлы Кластера");
+        dictionary["RU"]["SECTION_INCIDENTS"] = wxString::FromUTF8("Инциденты");
+        dictionary["RU"]["SECTION_NOTES"] = wxString::FromUTF8("Заметки");
+        dictionary["RU"]["SECTION_POLICIES"] = wxString::FromUTF8("Политики");
+        dictionary["RU"]["SECTION_SERVER"] = wxString::FromUTF8("О Сервере");
+        dictionary["RU"]["SECTION_SERVICES"] = wxString::FromUTF8("Службы");
+        dictionary["RU"]["SECTION_WORKFLOW"] = wxString::FromUTF8("Рабочие процессы");
+        
+        dictionary["RU"]["DESC_APPLICATIONS"] = wxString::FromUTF8("Отслеживание запущенных приложений, контейнеров и баз данных.");
+        dictionary["RU"]["DESC_CLUSTER"] = wxString::FromUTF8("Информация о подключенных дочерних узлах и топологии кластера.");
+        dictionary["RU"]["DESC_INCIDENTS"] = wxString::FromUTF8("Журнал недавних ошибок, сбоев или инцидентов безопасности.");
+        dictionary["RU"]["DESC_NOTES"] = wxString::FromUTF8("Свободные заметки для искусственного интеллекта и администраторов.");
+        dictionary["RU"]["DESC_POLICIES"] = wxString::FromUTF8("Политики безопасности, операционные правила и ограничения доступа.");
+        dictionary["RU"]["DESC_SERVER"] = wxString::FromUTF8("Основные аппаратные характеристики и данные об ОС.");
+        dictionary["RU"]["DESC_SERVICES"] = wxString::FromUTF8("Статус внутренних служб MCP и активных сессий инструментов.");
+        dictionary["RU"]["DESC_WORKFLOW"] = wxString::FromUTF8("Стандартные рабочие процедуры и конвейеры задач.");
+        
         dictionary["RU"]["SAVE_CHANGES"] = wxString::FromUTF8("Сохранить изменения");
         dictionary["RU"]["BTN_KNOWLEDGE"] = wxString::FromUTF8("Знания");
         dictionary["RU"]["SYSTEM_LOAD"] = wxString::FromUTF8("СИСТЕМНАЯ НАГРУЗКА");

@@ -4,6 +4,7 @@
 #include "crypto_utils.h"
 #include "server.h"
 #include "settings_manager.h"
+#include "sse_handler.h"
 #include <fstream>
 #include <iostream>
 #include <chrono>
@@ -288,7 +289,10 @@ bool ClusterManager::ApproveNode(const std::string& id) {
                             node.os_version = resp.value("os_version", "");
                             node.local_ip = resp.value("local_ip", "");
                             node.app_version = resp.value("app_version", "unknown");
-                            node.status = "connected";
+                            if (node.status != "connected") {
+                                node.status = "connected";
+                                notify_tools_changed();
+                            }
                             node.last_seen = std::chrono::duration_cast<std::chrono::seconds>(
                                 std::chrono::system_clock::now().time_since_epoch()).count();
                             ClusterManager::GetInstance().SaveNodes();
@@ -302,7 +306,10 @@ bool ClusterManager::ApproveNode(const std::string& id) {
                 std::lock_guard<std::mutex> lk(ClusterManager::GetInstance().mtx);
                 for (auto& node : ClusterManager::GetInstance().nodes) {
                     if (node.id == id) {
-                        node.status = "error_403";
+                        if (node.status != "error_403") {
+                            node.status = "error_403";
+                            notify_tools_changed();
+                        }
                         ClusterManager::GetInstance().SaveNodes();
                         break;
                     }
@@ -313,7 +320,10 @@ bool ClusterManager::ApproveNode(const std::string& id) {
             std::lock_guard<std::mutex> lk(ClusterManager::GetInstance().mtx);
             for (auto& node : ClusterManager::GetInstance().nodes) {
                 if (node.id == id) {
-                    node.status = "offline";
+                    if (node.status != "offline") {
+                        node.status = "offline";
+                        notify_tools_changed();
+                    }
                     ClusterManager::GetInstance().SaveNodes();
                     break;
                 }
@@ -336,6 +346,7 @@ void ClusterManager::RemoveNode(const std::string& id) {
     if (it != nodes.end()) {
         nodes.erase(it, nodes.end());
         SaveNodes();
+        notify_tools_changed();
     }
 }
 
@@ -351,6 +362,7 @@ bool ClusterManager::UpdateNodeId(const std::string& oldId, const std::string& n
             n.id = newId;
             n.hostname = newId; // Update hostname for GUI display
             SaveNodes();
+            notify_tools_changed();
             
             // Also update token permissions to prevent access loss
             auto tokens = NetworkUtils::LoadTokens();
