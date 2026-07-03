@@ -271,7 +271,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
             [session, session_id, host, port](size_t offset, httplib::DataSink &sink) {
                 if (offset == 0) {
                     // Отправляем первое событие endpoint (как требует MCP)
-                    std::string endpoint = "http://" + host + ":" + std::to_string(port) + "/message?sessionId=" + session_id;
+                    std::string endpoint = "/message?sessionId=" + session_id;
                     std::string evt = "event: endpoint\ndata: " + endpoint + "\n\n";
                     sink.write(evt.data(), evt.size());
                 }
