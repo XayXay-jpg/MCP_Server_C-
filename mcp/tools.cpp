@@ -113,7 +113,7 @@ json get_all_tools() {
         },
         {
             {"name", "update_knowledge"},
-            {"description", "Updates or adds information to a specific section of the knowledge base."},
+            {"description", "Updates or adds information to a specific section of the knowledge base. IMPORTANT: You MUST NOT use this tool automatically. You may only use this tool if the user explicitly asks you to update the knowledge base, or if you first ask the user for permission and they answer affirmatively."},
             {"inputSchema", {
                 {"type", "object"},
                 {"properties", {
