@@ -26,7 +26,7 @@ void SlideBook::AddPage(wxWindow* page, const wxString& text) {
 }
 
 void SlideBook::ChangeSelection(size_t index) {
-    if (index >= m_pages.size() || index == m_selection || m_pages.size() < 2) {
+    if (index >= m_pages.size() || index == m_targetSelection || m_pages.size() < 2) {
         return;
     }
     

@@ -13,7 +13,7 @@ public:
     void SetSlideDirection(SlideDirection dir) { m_slideDir = dir; }
     void AddPage(wxWindow* page, const wxString& text);
     void ChangeSelection(size_t index);
-    size_t GetSelection() const { return m_selection; }
+    size_t GetSelection() const { return m_targetSelection; }
     wxWindow* GetPage(size_t index) { return index < m_pages.size() ? m_pages[index] : nullptr; }
 
 private:

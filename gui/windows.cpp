@@ -363,13 +363,13 @@ void Windows::SetupUI() {
     // Set Icons
     wxInitAllImageHandlers();
     std::string icon_tools_png_base64 = "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAABH0lEQVR4nO2Y0Q3CMAxEr4XZEAwiJmEApuIwdhIn6o+oXz500j9x+nBSpS5V6qB7T2Tf3lE9bO1mEwBIAFwA3Hru42nK8Z/eYF9AARsAHAAMAI664yvH/2sB848B0I8BoB8DQD8GgH4MAP0YAPoxAPRjAOjHANCPAaAfA0A/BoB+DAD9GAD6MQD0YwDoxwDQjwGgHwNAPwaAfgwA/RgA+jEA9GMA6McA0M+vATy2qTfH/82C6T/KAn0827m+7fD/Ue14Vp7h0o9r5Xke18zzPK6d53lcQ8/zuKa7sOdxjT3P41p7nsc19zyPa+95HlfhU06326q08j2AAsAEYACwyq/X3L1qO73RvoAC1tX+r95mEwBI4ANp1D+s83yXlwAAAABJRU5ErkJggg==";
-    std::string icon_book_png_base64 = "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAABL0lEQVR4nO2Z0Q3CMAxEr0XZEAyCRZgATMVh7CROFEV/RP2yrZP+idMHJ1XqUqWe1J9OZN/cUT1s7WYTAEgAXADceu7jZcrxl95gX0ABGwAcAAwAjrrjI8f/awHzjwHQjwGgHwNAPwaAfgwA/RgA+jEA9GMA6McA0I8BoB8DQD8GgH4MAP0YAPoxAPRjAOjHANCPAaAfA0A/BoB+DAD9GAD6MQD0YwDoxwDQz68BPLapV8f/zYLpP8oCfTzbub5s8/9R7XhWnuHSj2vleR7XzPM8rp3neVxDz/O4pruw53GNPa/jWnt+Hdfc8zquvcd5XIU/Od1uq9LK9wAKABOAAcAqv15z/art9Eb7AgpYV/u/eptNACCBD6RBv7DO+V7uAAAAAElFTkSuQmCC";
+
     
     wxBitmap serverIcon = GetBitmapFromBase64(icon_server_png_base64);
     wxBitmap clusterIcon = GetBitmapFromBase64(icon_cluster_png_base64);
     wxBitmap settingsIcon = GetBitmapFromBase64(icon_settings_new_png_base64);
     wxBitmap toolsIcon = GetBitmapFromBase64(icon_tools_png_base64);
-    wxBitmap bookIcon = GetBitmapFromBase64(icon_app_png_base64);
+    wxBitmap bookIcon = GetBitmapFromBase64(icon_book_png_base64);
     
     btnServerLocal->SetIcon(serverIcon);
     btnCluster->SetIcon(clusterIcon);
@@ -1255,7 +1255,7 @@ void Windows::ApplyTheme() {
     btnServerLocal->SetIcon(RecolorIconBmp(icon_server_png_base64, iconColor));
     btnCluster->SetIcon(RecolorIconBmp(icon_cluster_png_base64, iconColor));
     btnTools->SetIcon(RecolorIconBmp(icon_tools_png_base64, iconColor));
-    btnKnowledge->SetIcon(RecolorIconBmp(icon_app_png_base64, iconColor));
+    btnKnowledge->SetIcon(RecolorIconBmp(icon_book_png_base64, iconColor));
     btnGlobalSettings->SetIcon(RecolorIconBmp(icon_settings_png_base64, iconColor));
     
     btnTabOverview->SetBackgroundColour(transparentBg);
@@ -1480,6 +1480,7 @@ void Windows::CancelSidebarAnimation() {
 }
 
 void Windows::OnSidebarServerLocal(wxCommandEvent& event) {
+    if (rootBook->GetSelection() == 0) return;
     CancelSidebarAnimation();
     UpdateSidebarSelection(btnServerLocal);
     rootBook->ChangeSelection(0); // ServerContainer
@@ -1488,6 +1489,7 @@ void Windows::OnSidebarServerLocal(wxCommandEvent& event) {
 }
 
 void Windows::OnSidebarTools(wxCommandEvent& event) {
+    if (rootBook->GetSelection() == 2) return;
     CancelSidebarAnimation();
     UpdateSidebarSelection(btnTools);
     rootBook->ChangeSelection(2); // ToolsContainer
@@ -1495,6 +1497,7 @@ void Windows::OnSidebarTools(wxCommandEvent& event) {
 }
 
 void Windows::OnSidebarKnowledge(wxCommandEvent& event) {
+    if (rootBook->GetSelection() == 3) return;
     CancelSidebarAnimation();
     UpdateSidebarSelection(btnKnowledge);
     rootBook->ChangeSelection(3); // KnowledgeContainer
@@ -1560,6 +1563,7 @@ void Windows::OnKnowledgeSave(wxCommandEvent& event) {
 }
 
 void Windows::OnSidebarGlobalSettings(wxCommandEvent& event) {
+    if (rootBook->GetSelection() == 4) return;
     CancelSidebarAnimation();
     UpdateSidebarSelection(btnGlobalSettings);
     rootBook->ChangeSelection(4); // GlobalSettingsContainer
@@ -1567,6 +1571,7 @@ void Windows::OnSidebarGlobalSettings(wxCommandEvent& event) {
 }
 
 void Windows::OnSidebarCluster(wxCommandEvent& event) {
+    if (rootBook->GetSelection() == 1) return;
     CancelSidebarAnimation();
     UpdateSidebarSelection(btnCluster);
     rootBook->ChangeSelection(1); // ClusterContainer
