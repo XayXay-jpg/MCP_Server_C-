@@ -58,8 +58,15 @@ public:
     // Attempt to reconnect to all saved nodes
     void ReconnectAllNodes();
 
+    // Start background thread to ping nodes and update status
+    void StartHealthCheckTask();
+    
+    // Stop the background health check task immediately
+    void StopHealthCheckTask();
+
 private:
     ClusterManager() {}
     std::vector<ClusterNode> nodes;
     std::mutex mtx;
+    bool health_check_running = false;
 };

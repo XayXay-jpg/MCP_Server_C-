@@ -2381,7 +2381,7 @@ void Windows::OnToggleCompact(wxCommandEvent& event) {
         btnGlobalSettings->SetIndent(15);
     }
     
-    m_animTimer->Start(8); // ~120fps
+    m_animTimer->Start(16); // ~60fps
 }
 
 void Windows::OnAnimTimer(wxTimerEvent& event) {
@@ -2393,10 +2393,10 @@ void Windows::OnAnimTimer(wxTimerEvent& event) {
         currentIconAngle = targetIconAngle;
         m_animTimer->Stop();
     } else {
-        int step = diff / 12; // Even slower, softer easing
+        int step = diff / 8; // Softer easing curve for 60fps
         if (step == 0) step = (diff > 0) ? 1 : -1;
         currentSidebarWidth += step;
-        currentIconAngle += angleDiff / 12;
+        currentIconAngle += angleDiff / 8;
         
         double progress = (currentSidebarWidth - 80.0) / (240.0 - 80.0);
         if (progress < 0.0) progress = 0.0;

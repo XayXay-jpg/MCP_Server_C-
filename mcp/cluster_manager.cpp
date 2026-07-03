@@ -451,3 +451,67 @@ void ClusterManager::PingNode(const std::string& id) {
         }
     }
 }
+
+void ClusterManager::StartHealthCheckTask() {
+    if (health_check_running) return;
+    health_check_running = true;
+    
+    ThreadPool::GetInstance().enqueue([this]() {
+        while (health_check_running) {
+            // Sleep in small increments to allow fast shutdown
+            for (int i = 0; i < 50 && health_check_running; ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            if (!health_check_running) break;
+            
+            bool changed = false;
+            long now = GetCurrentTimestamp();
+            
+            std::vector<ClusterNode> current_nodes;
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                current_nodes = nodes;
+            }
+            
+            for (auto& node : current_nodes) {
+                if (node.status == "connected") {
+                    // Try to fetch stats to see if it's alive
+                    std::string host = node.ip_address;
+                    int port = 3000;
+                    size_t colon_pos = host.find_last_of(':');
+                    if (colon_pos != std::string::npos) {
+                        try {
+                            port = std::stoi(host.substr(colon_pos + 1));
+                            host = host.substr(0, colon_pos);
+                        } catch (...) {}
+                    }
+                    
+                    httplib::Client cli(host, port);
+                    cli.set_connection_timeout(1, 0); // Quick timeout
+                    cli.set_read_timeout(1, 0);
+                    
+                    if (auto res = cli.Get("/cluster/stats")) {
+                        if (res->status == 200) {
+                            PingNode(node.id);
+                        } else {
+                            SetNodeStatus(node.id, "error_403");
+                            changed = true;
+                        }
+                    } else {
+                        // Connection failed
+                        SetNodeStatus(node.id, "offline");
+                        changed = true;
+                    }
+                }
+            }
+            
+            if (changed && g_refresh_cluster_callback) {
+                g_refresh_cluster_callback();
+            }
+        }
+    });
+}
+
+void ClusterManager::StopHealthCheckTask() {
+    health_check_running = false;
+}

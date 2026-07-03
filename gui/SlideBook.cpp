@@ -62,7 +62,7 @@ void SlideBook::ChangeSelection(size_t index) {
     oldPage->SetSize(size);
     oldPage->SetPosition(wxPoint(0, 0));
     
-    m_animTimer->Start(8); // ~120fps for ultra smoothness
+    m_animTimer->Start(16); // 60fps for smoother layout updates
 }
 
 void SlideBook::OnSize(wxSizeEvent& event) {
@@ -83,7 +83,7 @@ void SlideBook::OnSize(wxSizeEvent& event) {
 void SlideBook::OnAnimTimer(wxTimerEvent& event) {
     if (m_progress >= 1.0) return;
     
-    m_progress += 0.02; // completes in ~50 frames (400ms at 120fps)
+    m_progress += 0.025; // completes in 40 frames (640ms at 60fps)
     if (m_progress >= 1.0) {
         m_progress = 1.0;
         m_animTimer->Stop();

@@ -67,6 +67,7 @@ json handle_tools_list(const json& request, const TokenInfo& token) {
 std::unique_ptr<httplib::Server> g_svr;
 
 void stop_mcp_server() {
+    ClusterManager::GetInstance().StopHealthCheckTask();
     if (g_svr) {
         g_svr->stop();
     }
@@ -512,6 +513,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
     ThreadPool::GetInstance().enqueue([]() {
         std::this_thread::sleep_for(std::chrono::seconds(2));
         ClusterManager::GetInstance().ReconnectAllNodes();
+        ClusterManager::GetInstance().StartHealthCheckTask();
     });
 
     svr.listen(host.c_str(), port);
