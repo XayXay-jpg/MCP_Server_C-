@@ -179,7 +179,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
 
             bool token_valid = false;
             
-            if (req.path == "/cluster/join" || req.path == "/cluster/configure") {
+            if (req.path == "/cluster/join" || req.path == "/cluster/configure" || req.path == "/cluster/stats") {
                 token_valid = true;
             } else if (!token_provided.empty()) {
                 auto& sm = SettingsManager::Get();

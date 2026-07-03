@@ -1351,7 +1351,36 @@ void Windows::UpdateTabSelection(CustomButton* selected) {
     if (btnTabLogs) btnTabLogs->SetSelected(btnTabLogs == selected);
 }
 
+void Windows::CancelSidebarAnimation() {
+    if (m_animTimer && m_animTimer->IsRunning()) {
+        m_animTimer->Stop();
+        currentSidebarWidth = targetSidebarWidth;
+        currentIconAngle = targetIconAngle;
+        
+        sidebarPanel->SetMinSize(wxSize(currentSidebarWidth, -1));
+        double finalProgress = SettingsManager::Get().compactMode ? 0.0 : 1.0;
+        logoImg->SetProgress(finalProgress);
+        logoText->SetProgress(finalProgress);
+        
+        if (!SettingsManager::Get().compactMode) {
+            btnToggleTheme->Show();
+        }
+        
+        wxPoint center(compactIconImg.GetWidth()/2, compactIconImg.GetHeight()/2);
+        wxImage rotated = compactIconImg.Rotate(currentIconAngle, center, true);
+        int w = rotated.GetWidth();
+        int h = rotated.GetHeight();
+        wxRect cropRect((w - 24)/2, (h - 24)/2, 24, 24);
+        rotated = rotated.GetSubImage(cropRect);
+        wxBitmap newBmp(rotated);
+        btnToggleCompact->SetBitmapLabel(newBmp);
+        
+        this->Layout();
+    }
+}
+
 void Windows::OnSidebarServerLocal(wxCommandEvent& event) {
+    CancelSidebarAnimation();
     UpdateSidebarSelection(btnServerLocal);
     rootBook->ChangeSelection(0); // ServerContainer
     contentBook->ChangeSelection(0); // Overview
@@ -1359,18 +1388,21 @@ void Windows::OnSidebarServerLocal(wxCommandEvent& event) {
 }
 
 void Windows::OnSidebarTools(wxCommandEvent& event) {
+    CancelSidebarAnimation();
     UpdateSidebarSelection(btnTools);
     rootBook->ChangeSelection(2); // ToolsContainer
     UpdateTabSelection(nullptr);
 }
 
 void Windows::OnSidebarGlobalSettings(wxCommandEvent& event) {
+    CancelSidebarAnimation();
     UpdateSidebarSelection(btnGlobalSettings);
     rootBook->ChangeSelection(3); // GlobalSettingsContainer
     UpdateTabSelection(nullptr);
 }
 
 void Windows::OnSidebarCluster(wxCommandEvent& event) {
+    CancelSidebarAnimation();
     UpdateSidebarSelection(btnCluster);
     rootBook->ChangeSelection(1); // ClusterContainer
     UpdateTabSelection(nullptr);
@@ -1490,16 +1522,19 @@ void Windows::RefreshNodesList() {
 }
 
 void Windows::OnTabOverview(wxCommandEvent& event) {
+    CancelSidebarAnimation();
     contentBook->ChangeSelection(0);
     UpdateTabSelection(btnTabOverview);
 }
 
 void Windows::OnTabConnections(wxCommandEvent& event) {
+    CancelSidebarAnimation();
     contentBook->ChangeSelection(1);
     UpdateTabSelection(btnTabConnections);
 }
 
 void Windows::OnTabLogs(wxCommandEvent& event) {
+    CancelSidebarAnimation();
     contentBook->ChangeSelection(2);
     UpdateTabSelection(btnTabLogs);
 }

@@ -222,6 +222,8 @@ private:
     void OnTabNodes(wxCommandEvent& event);
     void OnNodeSelected(wxCommandEvent& event);
     
+    void CancelSidebarAnimation();
+    
     void OnToolToggled(wxCommandEvent& event);
 
     void OnStartStop(wxCommandEvent& event);
