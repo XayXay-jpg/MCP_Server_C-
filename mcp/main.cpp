@@ -25,6 +25,7 @@
 #include "crypto_utils.h"
 #include "cluster_manager.h"
 #include "thread_pool.h"
+#include "knowledge_layer.h"
 #include "cluster_handler.h"
 
 namespace fs = std::filesystem;
@@ -93,6 +94,9 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
         mcp_log("[Fatal] Failed to initialize sandbox directory: " + std::string(e.what()));
         return 1;
     }
+
+    // Initialize Knowledge Layer
+    KnowledgeLayer::GetInstance().Load(BASE_DIR.string());
 
     g_svr = std::make_unique<httplib::Server>();
     auto& svr = *g_svr;

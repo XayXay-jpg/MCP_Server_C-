@@ -8,6 +8,7 @@
 #include "settings_manager.h"
 #include "cluster_manager.h"
 #include "crypto_utils.h"
+#include "knowledge_layer.h"
 
 #ifdef _WIN32
 #define POPEN _popen
@@ -98,6 +99,28 @@ json get_all_tools() {
                 {"type", "object"},
                 {"properties", json::object()},
                 {"required", json::array()}
+            }}
+        },
+        {
+            {"name", "get_knowledge"},
+            {"description", "Retrieves the digital twin knowledge base. Pass a section name to get specific data, or omit to get the full knowledge graph."},
+            {"inputSchema", {
+                {"type", "object"},
+                {"properties", {
+                    {"section", {{"type", "string"}, {"description", "Optional section name (server, services, applications, policies, workflow, etc.)"}}}
+                }}
+            }}
+        },
+        {
+            {"name", "update_knowledge"},
+            {"description", "Updates or adds information to a specific section of the knowledge base."},
+            {"inputSchema", {
+                {"type", "object"},
+                {"properties", {
+                    {"section", {{"type", "string"}, {"description", "Section name (e.g., 'services')"}}},
+                    {"data", {{"type", "object"}, {"description", "JSON data to save into the section"}}}
+                }},
+                {"required", {"section", "data"}}
             }}
         }
     });
@@ -457,6 +480,50 @@ json tool_execute_command(const json& id, const json& arguments, const std::file
     }
 }
 
+json tool_get_knowledge(const json& id, const json& arguments) {
+    json data;
+    if (arguments.contains("section") && arguments["section"].is_string()) {
+        std::string section = arguments["section"].get<std::string>();
+        data = KnowledgeLayer::GetInstance().GetSection(section);
+        if (data.is_null()) {
+            return make_error(id, -32000, "Section '" + section + "' not found in knowledge base.");
+        }
+    } else {
+        data = KnowledgeLayer::GetInstance().GetFullKnowledge();
+    }
+    
+    return {
+        {"jsonrpc", "2.0"},
+        {"id", id},
+        {"result", {
+            {"content", json::array({
+                {{"type", "text"}, {"text", data.dump(2)}}
+            })}
+        }}
+    };
+}
+
+json tool_update_knowledge(const json& id, const json& arguments) {
+    if (!arguments.contains("section") || !arguments["section"].is_string() || !arguments.contains("data")) {
+        return make_error(id, -32602, "Missing 'section' (string) or 'data' (object/array)");
+    }
+    
+    std::string section = arguments["section"].get<std::string>();
+    json data = arguments["data"];
+    
+    KnowledgeLayer::GetInstance().UpdateSection(section, data);
+    
+    return {
+        {"jsonrpc", "2.0"},
+        {"id", id},
+        {"result", {
+            {"content", json::array({
+                {{"type", "text"}, {"text", "Knowledge section '" + section + "' updated successfully."}}
+            })}
+        }}
+    };
+}
+
 json handle_tools_call(const json& request, const TokenInfo& token) {
     auto id = request.value("id", json(nullptr));
     if (!request.contains("params") || !request["params"].contains("name")) {
@@ -588,6 +655,10 @@ json handle_tools_call(const json& request, const TokenInfo& token) {
                 res_json = tool_execute_command(id, arguments, base_dir);
             } else if (name == "take_screenshot") {
                 res_json = tool_take_screenshot(id, arguments, base_dir);
+            } else if (name == "get_knowledge") {
+                res_json = tool_get_knowledge(id, arguments);
+            } else if (name == "update_knowledge") {
+                res_json = tool_update_knowledge(id, arguments);
             } else {
                 res_json = make_error(id, -32601, "Tool not found");
             }

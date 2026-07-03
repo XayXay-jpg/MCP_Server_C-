@@ -6,6 +6,8 @@
 #include "CustomButton.h"
 #include "../mcp/settings_manager.h"
 #include "../mcp/cluster_manager.h"
+#include "../mcp/knowledge_layer.h"
+#include <nlohmann/json.hpp>
 #include "icons.h"
 #include "permissions_dialog.h"
 #include <wx/mstream.h>
@@ -175,7 +177,10 @@ enum {
     ID_BTN_TOGGLE_COMPACT,
     ID_BTN_TOGGLE_THEME,
     ID_ANIM_TIMER,
-    ID_COMBO_SERVER_STATS
+    ID_COMBO_SERVER_STATS,
+    ID_BTN_KNOWLEDGE,
+    ID_LIST_KNOWLEDGE_SECTIONS,
+    ID_BTN_KNOWLEDGE_SAVE
 };
 
 Windows::Windows(const wxString& title) : wxFrame(NULL, wxID_ANY, title, wxDefaultPosition, wxSize(1000, 750)), isServerRunning(false), uptimeSeconds(0) {
@@ -333,51 +338,56 @@ void Windows::SetupUI() {
     btnServerLocal = new CustomButton(sidebarPanel, ID_BTN_SERVER_LOCAL, _("Local Server"));
     btnCluster = new CustomButton(sidebarPanel, ID_BTN_CLUSTER, _("Cluster Nodes"));
     btnTools = new CustomButton(sidebarPanel, ID_BTN_TOOLS, _("Tools"));
-    btnGlobalSettings = new CustomButton(sidebarPanel, ID_BTN_GLOBAL_SETTINGS, _("Global Settings"));
-
-    // Ensure they have decent height
+    btnKnowledge = new CustomButton(sidebarPanel, ID_BTN_KNOWLEDGE, _("Knowledge Base"));
+    btnGlobalSettings = new CustomButton(sidebarPanel, ID_BTN_GLOBAL_SETTINGS, _("Settings"));
+    
     btnServerLocal->SetMinSize(wxSize(-1, 40));
     btnCluster->SetMinSize(wxSize(-1, 40));
     btnTools->SetMinSize(wxSize(-1, 40));
+    btnKnowledge->SetMinSize(wxSize(-1, 40));
     btnGlobalSettings->SetMinSize(wxSize(-1, 40));
-
+    
     btnServerLocal->SetIndent(15);
     btnCluster->SetIndent(15);
     btnTools->SetIndent(15);
+    btnKnowledge->SetIndent(15);
     btnGlobalSettings->SetIndent(15);
 
     sidebarSizer->Add(btnServerLocal, 0, wxEXPAND | wxBOTTOM, 5);
     sidebarSizer->Add(btnCluster, 0, wxEXPAND | wxBOTTOM, 5);
     sidebarSizer->Add(btnTools, 0, wxEXPAND | wxBOTTOM, 5);
+    sidebarSizer->Add(btnKnowledge, 0, wxEXPAND | wxBOTTOM, 5);
+    sidebarSizer->AddStretchSpacer();
     sidebarSizer->Add(btnGlobalSettings, 0, wxEXPAND | wxBOTTOM, 5);
 
     // Set Icons
     wxInitAllImageHandlers();
-    wxBitmap serverIcon = GetBitmapFromBase64(icon_server_png_base64);
-    btnServerLocal->SetIcon(serverIcon);
+    std::string icon_tools_png_base64 = "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAABH0lEQVR4nO2Y0Q3CMAxEr4XZEAwiJmEApuIwdhIn6o+oXz500j9x+nBSpS5V6qB7T2Tf3lE9bO1mEwBIAFwA3Hru42nK8Z/eYF9AARsAHAAMAI664yvH/2sB848B0I8BoB8DQD8GgH4MAP0YAPoxAPRjAOjHANCPAaAfA0A/BoB+DAD9GAD6MQD0YwDoxwDQjwGgHwNAPwaAfgwA/RgA+jEA9GMA6McA0M+vATy2qTfH/82C6T/KAn0827m+7fD/Ue14Vp7h0o9r5Xke18zzPK6d53lcQ8/zuKa7sOdxjT3P41p7nsc19zyPa+95HlfhU06326q08j2AAsAEYACwyq/X3L1qO73RvoAC1tX+r95mEwBI4ANp1D+s83yXlwAAAABJRU5ErkJggg==";
+    std::string icon_book_png_base64 = "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAABL0lEQVR4nO2Z0Q3CMAxEr0XZEAyCRZgATMVh7CROFEV/RP2yrZP+idMHJ1XqUqWe1J9OZN/cUT1s7WYTAEgAXADceu7jZcrxl95gX0ABGwAcAAwAjrrjI8f/awHzjwHQjwGgHwNAPwaAfgwA/RgA+jEA9GMA6McA0I8BoB8DQD8GgH4MAP0YAPoxAPRjAOjHANCPAaAfA0A/BoB+DAD9GAD6MQD0YwDoxwDQz68BPLapV8f/zYLpP8oCfTzbub5s8/9R7XhWnuHSj2vleR7XzPM8rp3neVxDz/O4pruw53GNPa/jWnt+Hdfc8zquvcd5XIU/Od1uq9LK9wAKABOAAcAqv15z/art9Eb7AgpYV/u/eptNACCBD6RBv7DO+V7uAAAAAElFTkSuQmCC";
     
+    wxBitmap serverIcon = GetBitmapFromBase64(icon_server_png_base64);
     wxBitmap clusterIcon = GetBitmapFromBase64(icon_cluster_png_base64);
-    btnCluster->SetIcon(clusterIcon);
-
-    wxBitmap toolsIcon = GetBitmapFromBase64(icon_tools_png_base64);
-    btnTools->SetIcon(toolsIcon);
-
     wxBitmap settingsIcon = GetBitmapFromBase64(icon_settings_new_png_base64);
+    wxBitmap toolsIcon = GetBitmapFromBase64(icon_tools_png_base64);
+    wxBitmap bookIcon = GetBitmapFromBase64(icon_book_png_base64);
+    
+    btnServerLocal->SetIcon(serverIcon);
+    btnCluster->SetIcon(clusterIcon);
+    btnTools->SetIcon(toolsIcon);
+    btnKnowledge->SetIcon(bookIcon);
     btnGlobalSettings->SetIcon(settingsIcon);
+    
+    wxFont btnFont(11, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
+    btnServerLocal->SetFont(btnFont);
+    btnCluster->SetFont(btnFont);
+    btnTools->SetFont(btnFont);
+    btnKnowledge->SetFont(btnFont);
+    btnGlobalSettings->SetFont(btnFont);
 
     wxBitmap appIconBmp = GetBitmapFromBase64(icon_logo_small_png_base64);
     wxIcon appIcon;
     appIcon.CopyFromBitmap(appIconBmp);
     this->SetIcon(appIcon);
-
-    wxFont btnFont(wxFontInfo(10).Bold());
-    btnServerLocal->SetFont(btnFont);
-    btnCluster->SetFont(btnFont);
-    btnTools->SetFont(btnFont);
-    btnGlobalSettings->SetFont(btnFont);
-
-    sidebarSizer->AddStretchSpacer();
-    sidebarSizer->Add(btnGlobalSettings, 0, wxEXPAND | wxBOTTOM, 20);
 
     sidebarPanel->SetSizer(sidebarSizer);
 
@@ -876,6 +886,53 @@ void Windows::SetupUI() {
     toolsContainer->SetSizer(toolsSizer);
     rootBook->AddPage(toolsContainer, "ToolsContainer");
     
+    // --- KNOWLEDGE LAYER PAGE ---
+    knowledgeContainer = new wxPanel(rootBook, wxID_ANY);
+    knowledgeContainer->SetBackgroundColour(wxColour("#0A0A0B")); // Dark sleek UI
+    
+    wxBoxSizer* knowledgeSizer = new wxBoxSizer(wxVERTICAL);
+    
+    lblKnowledgeHeader = new wxStaticText(knowledgeContainer, wxID_ANY, "Knowledge Base");
+    lblKnowledgeHeader->SetFont(wxFont(24, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
+    lblKnowledgeHeader->SetForegroundColour(wxColour("#FFFFFF"));
+    
+    wxStaticText* lblKnowledgeSub = new wxStaticText(knowledgeContainer, wxID_ANY, "View and edit the AI Digital Twin infrastructure model.");
+    lblKnowledgeSub->SetForegroundColour(wxColour("#A1A1AA"));
+    
+    knowledgeSizer->Add(lblKnowledgeHeader, 0, wxALL, 20);
+    knowledgeSizer->Add(lblKnowledgeSub, 0, wxLEFT | wxRIGHT | wxBOTTOM, 20);
+    
+    wxBoxSizer* knowledgeSplitSizer = new wxBoxSizer(wxHORIZONTAL);
+    
+    // Left pane: List of sections
+    listKnowledgeSections = new wxListBox(knowledgeContainer, ID_LIST_KNOWLEDGE_SECTIONS, wxDefaultPosition, wxSize(200, -1), 0, NULL, wxBORDER_NONE);
+    listKnowledgeSections->SetBackgroundColour(wxColour("#141416")); // slightly lighter than bg
+    listKnowledgeSections->SetForegroundColour(wxColour("#FFFFFF"));
+    listKnowledgeSections->SetFont(wxFont(11, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+    
+    // Right pane: JSON Editor
+    wxBoxSizer* rightPaneSizer = new wxBoxSizer(wxVERTICAL);
+    txtKnowledgeData = new wxTextCtrl(knowledgeContainer, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxBORDER_NONE);
+    txtKnowledgeData->SetBackgroundColour(wxColour("#141416"));
+    txtKnowledgeData->SetForegroundColour(wxColour("#E5E7EB"));
+    txtKnowledgeData->SetFont(wxFont(10, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL)); // Monospace font for JSON
+    
+    btnKnowledgeSave = new CustomButton(knowledgeContainer, ID_BTN_KNOWLEDGE_SAVE, "Save Changes");
+    btnKnowledgeSave->SetBackgroundColour(wxColour("#4F46E5")); // Sleek primary color
+    btnKnowledgeSave->SetForegroundColour(wxColour("#FFFFFF"));
+    btnKnowledgeSave->SetFont(btnFont);
+    
+    rightPaneSizer->Add(txtKnowledgeData, 1, wxEXPAND | wxBOTTOM, 10);
+    rightPaneSizer->Add(btnKnowledgeSave, 0, wxALIGN_RIGHT);
+    
+    knowledgeSplitSizer->Add(listKnowledgeSections, 0, wxEXPAND | wxRIGHT, 15);
+    knowledgeSplitSizer->Add(rightPaneSizer, 1, wxEXPAND);
+    
+    knowledgeSizer->Add(knowledgeSplitSizer, 1, wxEXPAND | wxALL, 20);
+    knowledgeContainer->SetSizer(knowledgeSizer);
+    rootBook->AddPage(knowledgeContainer, "KnowledgeContainer");
+    // ---------------------------------
+    
     RefreshToolsList();
 
     // === PAGE 1: GLOBAL SETTINGS CONTAINER ===
@@ -1154,6 +1211,10 @@ void Windows::ApplyTheme() {
     btnTools->SetForegroundColour(mutedColor);
     btnTools->SetHoverColour(wxColour("#1F1F24"));
     
+    btnKnowledge->SetBackgroundColour(transparentBg);
+    btnKnowledge->SetForegroundColour(mutedColor);
+    btnKnowledge->SetHoverColour(wxColour("#1F1F24"));
+    
     btnGlobalSettings->SetBackgroundColour(transparentBg);
     btnGlobalSettings->SetForegroundColour(mutedColor);
     btnGlobalSettings->SetHoverColour(wxColour("#1F1F24"));
@@ -1162,6 +1223,7 @@ void Windows::ApplyTheme() {
     btnServerLocal->SetIcon(RecolorIconBmp(icon_server_png_base64, iconColor));
     btnCluster->SetIcon(RecolorIconBmp(icon_cluster_png_base64, iconColor));
     btnTools->SetIcon(RecolorIconBmp(icon_tools_png_base64, iconColor));
+    btnKnowledge->SetIcon(RecolorIconBmp(icon_book_png_base64, iconColor));
     btnGlobalSettings->SetIcon(RecolorIconBmp(icon_settings_png_base64, iconColor));
     
     btnTabOverview->SetBackgroundColour(transparentBg);
@@ -1231,7 +1293,9 @@ void Windows::ApplyTheme() {
     
     sidebarPanel->SetMinSize(wxSize(sidebarWidth, -1));
     btnServerLocal->SetMinSize(wxSize(btnWidth, 40));
+    btnCluster->SetMinSize(wxSize(btnWidth, 40));
     btnTools->SetMinSize(wxSize(btnWidth, 40));
+    btnKnowledge->SetMinSize(wxSize(btnWidth, 40));
     btnGlobalSettings->SetMinSize(wxSize(btnWidth, 40));
     
     if (compact) {
@@ -1241,6 +1305,7 @@ void Windows::ApplyTheme() {
         btnServerLocal->SetIndent(0);
         btnCluster->SetIndent(0);
         btnTools->SetIndent(0);
+        btnKnowledge->SetIndent(0);
         btnGlobalSettings->SetIndent(0);
     } else {
         logoImg->Show();
@@ -1249,6 +1314,7 @@ void Windows::ApplyTheme() {
         btnServerLocal->SetIndent(15);
         btnCluster->SetIndent(15);
         btnTools->SetIndent(15);
+        btnKnowledge->SetIndent(15);
         btnGlobalSettings->SetIndent(15);
     }
     
@@ -1264,7 +1330,8 @@ void Windows::UpdateLanguage() {
     btnServerLocal->SetLabel(compact ? "" : lang.GetString("SERVER_LOCAL"));
     btnCluster->SetLabel(compact ? "" : lang.GetString("CLUSTER_NODES"));
     btnTools->SetLabel(compact ? "" : lang.GetString("TOOLS"));
-    btnGlobalSettings->SetLabel(compact ? "" : lang.GetString("GLOBAL_SETTINGS"));
+    btnKnowledge->SetLabel(compact ? "" : "Knowledge");
+    btnGlobalSettings->SetLabel(compact ? "" : lang.GetString("SETTINGS"));
     
     btnTabOverview->SetLabel(lang.GetString("TAB_OVERVIEW"));
     btnTabConnections->SetLabel(lang.GetString("TAB_CONNECTIONS"));
@@ -1342,6 +1409,7 @@ void Windows::UpdateSidebarSelection(CustomButton* selected) {
     btnServerLocal->SetSelected(btnServerLocal == selected);
     btnCluster->SetSelected(btnCluster == selected);
     btnTools->SetSelected(btnTools == selected);
+    btnKnowledge->SetSelected(btnKnowledge == selected);
     btnGlobalSettings->SetSelected(btnGlobalSettings == selected);
 }
 
@@ -1394,10 +1462,53 @@ void Windows::OnSidebarTools(wxCommandEvent& event) {
     UpdateTabSelection(nullptr);
 }
 
+void Windows::OnSidebarKnowledge(wxCommandEvent& event) {
+    CancelSidebarAnimation();
+    UpdateSidebarSelection(btnKnowledge);
+    rootBook->ChangeSelection(3); // KnowledgeContainer
+    UpdateTabSelection(nullptr);
+    
+    // Refresh sections
+    listKnowledgeSections->Clear();
+    auto sections = KnowledgeLayer::GetInstance().GetSections();
+    for (const auto& s : sections) {
+        listKnowledgeSections->Append(s);
+    }
+    txtKnowledgeData->Clear();
+}
+
+void Windows::OnKnowledgeSectionSelect(wxCommandEvent& event) {
+    int sel = listKnowledgeSections->GetSelection();
+    if (sel != wxNOT_FOUND) {
+        std::string section = listKnowledgeSections->GetString(sel).ToStdString();
+        nlohmann::json data = KnowledgeLayer::GetInstance().GetSection(section);
+        txtKnowledgeData->SetValue(data.dump(4));
+    }
+}
+
+void Windows::OnKnowledgeSave(wxCommandEvent& event) {
+    int sel = listKnowledgeSections->GetSelection();
+    if (sel == wxNOT_FOUND) {
+        wxMessageBox("Please select a section first.", "Error", wxICON_ERROR);
+        return;
+    }
+    
+    std::string section = listKnowledgeSections->GetString(sel).ToStdString();
+    std::string rawData = txtKnowledgeData->GetValue().ToStdString();
+    
+    try {
+        nlohmann::json parsed = nlohmann::json::parse(rawData);
+        KnowledgeLayer::GetInstance().UpdateSection(section, parsed);
+        wxMessageBox("Changes saved successfully to '" + section + "'.", "Success", wxICON_INFORMATION);
+    } catch (const std::exception& e) {
+        wxMessageBox(std::string("Invalid JSON format:\n") + e.what(), "Parse Error", wxICON_ERROR);
+    }
+}
+
 void Windows::OnSidebarGlobalSettings(wxCommandEvent& event) {
     CancelSidebarAnimation();
     UpdateSidebarSelection(btnGlobalSettings);
-    rootBook->ChangeSelection(3); // GlobalSettingsContainer
+    rootBook->ChangeSelection(4); // GlobalSettingsContainer
     UpdateTabSelection(nullptr);
 }
 
@@ -2323,11 +2434,16 @@ wxBEGIN_EVENT_TABLE(Windows, wxFrame)
     EVT_BUTTON(ID_BTN_SERVER_LOCAL, Windows::OnSidebarServerLocal)
     EVT_BUTTON(ID_BTN_CLUSTER,      Windows::OnSidebarCluster)
     EVT_BUTTON(ID_BTN_TOOLS,        Windows::OnSidebarTools)
+    EVT_BUTTON(ID_BTN_KNOWLEDGE,    Windows::OnSidebarKnowledge)
     EVT_BUTTON(ID_BTN_GLOBAL_SETTINGS, Windows::OnSidebarGlobalSettings)
     EVT_BUTTON(ID_BTN_TAB_OVERVIEW,  Windows::OnTabOverview)
     EVT_BUTTON(ID_BTN_TAB_CONNECTIONS,Windows::OnTabConnections)
     EVT_BUTTON(ID_BTN_TAB_LOGS,      Windows::OnTabLogs)
     EVT_BUTTON(ID_BTN_STARTSTOP, Windows::OnStartStop)
+    
+    EVT_LISTBOX(ID_LIST_KNOWLEDGE_SECTIONS, Windows::OnKnowledgeSectionSelect)
+    EVT_BUTTON(ID_BTN_KNOWLEDGE_SAVE, Windows::OnKnowledgeSave)
+    
     EVT_TIMER(ID_TIMER,          Windows::OnTimer)
     EVT_BUTTON(ID_BTN_BROWSE_WS, Windows::OnBrowseWorkspace)
     EVT_BUTTON(ID_BTN_SAVE_WS,   Windows::OnSaveWorkspace)
@@ -2364,20 +2480,24 @@ void Windows::OnToggleCompact(wxCommandEvent& event) {
         btnServerLocal->SetLabel("");
         btnCluster->SetLabel("");
         btnTools->SetLabel("");
+        btnKnowledge->SetLabel("");
         btnGlobalSettings->SetLabel("");
         btnServerLocal->SetIndent(0);
         btnCluster->SetIndent(0);
         btnTools->SetIndent(0);
+        btnKnowledge->SetIndent(0);
         btnGlobalSettings->SetIndent(0);
     } else {
         auto& lang = LanguageManager::Get();
         btnServerLocal->SetLabel(lang.GetString("SERVER_LOCAL"));
         btnCluster->SetLabel(lang.GetString("CLUSTER_NODES"));
         btnTools->SetLabel(lang.GetString("TOOLS"));
-        btnGlobalSettings->SetLabel(lang.GetString("GLOBAL_SETTINGS"));
+        btnKnowledge->SetLabel("Knowledge");
+        btnGlobalSettings->SetLabel(lang.GetString("SETTINGS"));
         btnServerLocal->SetIndent(15);
         btnCluster->SetIndent(15);
         btnTools->SetIndent(15);
+        btnKnowledge->SetIndent(15);
         btnGlobalSettings->SetIndent(15);
     }
     

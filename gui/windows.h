@@ -60,6 +60,7 @@ private:
     CustomButton* btnServerLocal = nullptr;
     CustomButton* btnCluster = nullptr;
     CustomButton* btnTools = nullptr;
+    CustomButton* btnKnowledge = nullptr;
     CustomButton* btnGlobalSettings = nullptr;
     
     // Tab bar buttons (horizontal)
@@ -95,6 +96,12 @@ private:
     wxScrolledWindow* scrollTools = nullptr;
     wxBoxSizer* scrollToolsSizer = nullptr;
     wxPanel* globalSettingsContainer; // Holds pageGlobalSettings
+    
+    wxPanel* knowledgeContainer;
+    wxStaticText* lblKnowledgeHeader = nullptr;
+    wxListBox* listKnowledgeSections = nullptr;
+    wxTextCtrl* txtKnowledgeData = nullptr;
+    CustomButton* btnKnowledgeSave = nullptr;
     
     SlideBook* contentBook; // Holds server tabs (Overview, Connections, Logs)
     
@@ -213,6 +220,7 @@ private:
     void OnSidebarServerLocal(wxCommandEvent& event);
     void OnSidebarCluster(wxCommandEvent& event);
     void OnSidebarTools(wxCommandEvent& event);
+    void OnSidebarKnowledge(wxCommandEvent& event);
     void OnSidebarGlobalSettings(wxCommandEvent& event);
     
     void RefreshNodesList();
@@ -225,6 +233,9 @@ private:
     void CancelSidebarAnimation();
     
     void OnToolToggled(wxCommandEvent& event);
+
+    void OnKnowledgeSectionSelect(wxCommandEvent& event);
+    void OnKnowledgeSave(wxCommandEvent& event);
 
     void OnStartStop(wxCommandEvent& event);
     void OnServerLog(wxThreadEvent& event);

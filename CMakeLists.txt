@@ -15,8 +15,8 @@ FetchContent_MakeAvailable(httplib)
 find_package(Threads REQUIRED)
 find_package(wxWidgets COMPONENTS core base REQUIRED)
 include(${wxWidgets_USE_FILE})
-
 file(GLOB MCP_SOURCES "mcp/*.cpp")
+list(APPEND MCP_SOURCES "mcp/knowledge_layer.cpp")
 file(GLOB GUI_SOURCES "gui/*.cpp")
 
 find_package(OpenSSL REQUIRED)

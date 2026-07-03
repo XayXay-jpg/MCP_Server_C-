@@ -14,7 +14,7 @@ nlohmann::json handle_tools_call(const nlohmann::json& request, const TokenInfo&
 // Отдельные реализации инструментов
 nlohmann::json tool_list_directory(const nlohmann::json& id, const nlohmann::json& arguments);
 nlohmann::json tool_read_file(const nlohmann::json& id, const nlohmann::json& arguments);
-nlohmann::json tool_write_file(const nlohmann::json& id, const nlohmann::json& arguments);
-nlohmann::json tool_start_script(const nlohmann::json& id, const nlohmann::json& arguments);
-nlohmann::json tool_search_files(const nlohmann::json& id, const nlohmann::json& arguments);
-nlohmann::json tool_execute_command(const nlohmann::json& id, const nlohmann::json& arguments);
+nlohmann::json tool_execute_command(const nlohmann::json& id, const nlohmann::json& arguments, const std::filesystem::path& base_dir);
+nlohmann::json tool_take_screenshot(const nlohmann::json& id, const nlohmann::json& arguments, const std::filesystem::path& base_dir);
+nlohmann::json tool_get_knowledge(const nlohmann::json& id, const nlohmann::json& arguments);
+nlohmann::json tool_update_knowledge(const nlohmann::json& id, const nlohmann::json& arguments);
