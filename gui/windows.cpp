@@ -244,6 +244,16 @@ Windows::Windows(const wxString& title) : wxFrame(NULL, wxID_ANY, title, wxDefau
     m_timer = new wxTimer(this, ID_TIMER);
     m_animTimer = new wxTimer(this, ID_ANIM_TIMER);
     
+    // Warm-up read: populate the static CPU delta counters so the
+    // very first timer tick shows real CPU usage instead of 0.
+    std::thread([]() {
+        GetSystemStats(); // seed prev values
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        // Second read to get a real delta — stored in lastRemoteStats is unused here,
+        // but the static vars inside GetSystemStats() are now seeded correctly.
+        GetSystemStats();
+    }).detach();
+    
     // Initialize Tray Icon
     trayIcon = new wxTaskBarIcon();
     wxIcon appIcon;
@@ -1597,18 +1607,23 @@ void Windows::OnTimer(wxTimerEvent& event) {
                     host = host.substr(0, colon);
                 }
                 // Fetch /cluster/stats from the remote node in a non-blocking way
-                // We store a future and check it each tick
                 static std::future<SystemStats> remoteFuture;
                 static std::string lastIp;
                 static SystemStats lastRemoteStats = {};
                 
-                if (lastIp != ip || !remoteFuture.valid() ||
-                    remoteFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
-                    if (remoteFuture.valid() &&
-                        remoteFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
-                        lastRemoteStats = remoteFuture.get();
-                    }
+                bool ipChanged = (lastIp != ip);
+                bool futureReady = remoteFuture.valid() &&
+                    remoteFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready;
+
+                if (futureReady) {
+                    // Collect completed result
+                    lastRemoteStats = remoteFuture.get();
+                }
+
+                // Start a new fetch if: IP changed, or no fetch running at all
+                if (ipChanged || !remoteFuture.valid()) {
                     lastIp = ip;
+                    if (ipChanged) lastRemoteStats = {}; // reset only on server change
                     std::string captHost = host;
                     int captPort = port;
                     remoteFuture = std::async(std::launch::async, [captHost, captPort]() -> SystemStats {
