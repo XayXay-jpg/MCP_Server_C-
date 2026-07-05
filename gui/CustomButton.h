@@ -15,6 +15,7 @@ public:
     void SetTreeLineMode(int mode);
     void SetBorderRadius(int radius);
     void SetAlignment(int align);
+    void SetCardMode(bool cardMode);
     
 private:
     void OnPaint(wxPaintEvent& event);
@@ -37,6 +38,7 @@ private:
     int m_treeLineMode;
     int m_borderRadius;
     int m_alignment;
+    bool m_cardMode;
     
     wxTimer* m_animTimer;
     double m_selProgress;

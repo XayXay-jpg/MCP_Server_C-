@@ -3,6 +3,8 @@
 #include <wx/listctrl.h>
 #include <wx/button.h>
 #include <wx/stattext.h>
+#include <wx/choice.h>
+#include <wx/checkbox.h>
 #include <string>
 #include <vector>
 #include "../mcp/network_utils.h"
@@ -22,6 +24,15 @@ private:
     wxButton* btnSave;
     wxButton* btnCancel;
 
+    wxChoice* choicePresets;
+    wxButton* btnApplyPreset;
+    
+    wxChoice* choiceOverseer;
+    wxCheckBox* chkToolConfirm;
+    
+    std::vector<std::string> m_overseerNodeIds;
+    std::vector<std::string> m_internalRoles;
+
     void SetupUI();
     void LoadData();
     void OnServerSelected(wxListEvent& event);
@@ -29,6 +40,9 @@ private:
     void OnWorkspaceChanged(wxCommandEvent& event);
     void OnSave(wxCommandEvent& event);
     void OnCancel(wxCommandEvent& event);
+    void OnToolSelected(wxListEvent& event);
+    void OnToolConfirmToggled(wxCommandEvent& event);
+    void OnApplyPreset(wxCommandEvent& event);
     
     // Helper to get available tools
     std::vector<std::string> GetAllTools();

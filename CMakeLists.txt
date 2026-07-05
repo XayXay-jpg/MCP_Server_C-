@@ -13,7 +13,7 @@ FetchContent_Declare(httplib URL https://github.com/yhirose/cpp-httplib/archive/
 FetchContent_MakeAvailable(httplib)
 
 find_package(Threads REQUIRED)
-find_package(wxWidgets COMPONENTS core base REQUIRED)
+find_package(wxWidgets COMPONENTS core base adv REQUIRED)
 include(${wxWidgets_USE_FILE})
 file(GLOB MCP_SOURCES "mcp/*.cpp")
 list(APPEND MCP_SOURCES "mcp/knowledge_layer.cpp" "mcp/auto_discovery.cpp")

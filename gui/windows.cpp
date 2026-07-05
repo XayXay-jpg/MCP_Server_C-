@@ -16,6 +16,7 @@
 #include <wx/base64.h>
 #include <wx/dcgraph.h>
 #include <wx/statline.h>
+#include <wx/wrapsizer.h>
 #include <httplib.h>
 #include <future>
 #include <fstream>
@@ -25,6 +26,7 @@
 #include <iomanip>
 #include <sstream>
 #include "sys_stats.h"
+#include "../mcp/confirmation_manager.h"
 
 std::string HashPassword(const std::string& input) {
     uint64_t hash = 14695981039346656037ull;
@@ -61,6 +63,7 @@ const std::string APP_VERSION = "1.0.0-beta";
 
 wxDEFINE_EVENT(wxEVT_SERVER_LOG, wxThreadEvent);
 wxDEFINE_EVENT(wxEVT_SERVER_NOTIFY, wxThreadEvent);
+wxDEFINE_EVENT(wxEVT_MCP_CONFIRM_REQUEST, wxThreadEvent);
 
 wxBEGIN_EVENT_TABLE(AnimatedLogo, wxPanel)
     EVT_PAINT(AnimatedLogo::OnPaint)
@@ -222,6 +225,14 @@ Windows::Windows(const wxString& title) : wxFrame(NULL, wxID_ANY, title, wxDefau
     };
     
     Bind(wxEVT_SERVER_NOTIFY, &Windows::OnServerNotify, this);
+    
+    Bind(wxEVT_MCP_CONFIRM_REQUEST, &Windows::OnMcpConfirmRequest, this);
+
+    ConfirmationManager::GetInstance().SetNotificationCallback([this](const std::string& req_id) {
+        wxThreadEvent* event = new wxThreadEvent(wxEVT_MCP_CONFIRM_REQUEST);
+        event->SetString(req_id);
+        wxQueueEvent(this, event);
+    });
 
     LanguageManager::Get().SetLanguage(SettingsManager::Get().language);
 
@@ -287,9 +298,25 @@ Windows::Windows(const wxString& title) : wxFrame(NULL, wxID_ANY, title, wxDefau
         wxCommandEvent dummy;
         OnStartStop(dummy);
     }
+    
+    // Auto internet check on app startup
+    wxCommandEvent dummyCheckNetwork;
+    OnCheckNetwork(dummyCheckNetwork);
 }
 
 Windows::~Windows() {
+    if (m_timer) {
+        m_timer->Stop();
+        delete m_timer;
+    }
+    if (m_animTimer) {
+        m_animTimer->Stop();
+        delete m_animTimer;
+    }
+    if (trayIcon) {
+        trayIcon->Destroy();
+    }
+    
     if (isServerRunning) {
         stop_mcp_server();
         if (serverThread.joinable()) {
@@ -867,7 +894,7 @@ void Windows::SetupUI() {
     lblToolsHeader->SetForegroundColour(wxColour("#F4F4F5"));
     toolsSizer->Add(lblToolsHeader, 0, wxALL, 30);
     
-    wxStaticText* lblToolsSub = new wxStaticText(toolsContainer, wxID_ANY, lang.GetString("TOOLS_SUB"));
+    lblToolsSub = new wxStaticText(toolsContainer, wxID_ANY, lang.GetString("TOOLS_SUB"));
     lblToolsSub->SetFont(wxFontInfo(10));
     lblToolsSub->SetForegroundColour(wxColour("#A1A1AA")); // Zinc 400
     toolsSizer->Add(lblToolsSub, 0, wxLEFT | wxRIGHT | wxBOTTOM, 30);
@@ -892,47 +919,63 @@ void Windows::SetupUI() {
     
     // --- KNOWLEDGE LAYER PAGE ---
     knowledgeContainer = new wxPanel(rootBook, wxID_ANY);
-    knowledgeContainer->SetBackgroundColour(wxColour("#0A0A0B")); // Dark sleek UI
+    knowledgeContainer->SetBackgroundColour(wxColour("#0E0E0E")); // Surface
     
     wxBoxSizer* knowledgeSizer = new wxBoxSizer(wxVERTICAL);
     lblKnowledgeHeader = new wxStaticText(knowledgeContainer, wxID_ANY, lang.GetString("KNOWLEDGE_BASE"));
     lblKnowledgeHeader->SetFont(wxFont(24, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
-    lblKnowledgeHeader->SetForegroundColour(wxColour("#FFFFFF"));
+    lblKnowledgeHeader->SetForegroundColour(wxColour("#F5F5F5")); // Ink
     
-    wxStaticText* lblKnowledgeSub = new wxStaticText(knowledgeContainer, wxID_ANY, lang.GetString("KNOWLEDGE_SUB"));
-    lblKnowledgeSub->SetForegroundColour(wxColour("#A1A1AA"));
+    lblKnowledgeSub = new wxStaticText(knowledgeContainer, wxID_ANY, lang.GetString("KNOWLEDGE_SUB"));
+    lblKnowledgeSub->SetForegroundColour(wxColour("#A3A3A3")); // Ink-muted
     
     knowledgeSizer->Add(lblKnowledgeHeader, 0, wxALL, 20);
-    knowledgeSizer->Add(lblKnowledgeSub, 0, wxLEFT | wxRIGHT, 20);
+    knowledgeSizer->Add(lblKnowledgeSub, 0, wxLEFT | wxRIGHT | wxBOTTOM, 20);
     
-    lblKnowledgeSectionDesc = new wxStaticText(knowledgeContainer, wxID_ANY, "");
-    lblKnowledgeSectionDesc->SetForegroundColour(wxColour("#4F46E5")); // Accent color for the section description
-    lblKnowledgeSectionDesc->SetFont(wxFont(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_ITALIC, wxFONTWEIGHT_NORMAL));
-    knowledgeSizer->Add(lblKnowledgeSectionDesc, 0, wxLEFT | wxRIGHT | wxBOTTOM, 20);
+    knowledgeSlideBook = new SlideBook(knowledgeContainer, wxID_ANY);
+    knowledgeSlideBook->SetSlideDirection(SlideBook::SLIDE_HORIZONTAL);
     
-    wxBoxSizer* knowledgeSplitSizer = new wxBoxSizer(wxHORIZONTAL);
+    // Page 0: Bookshelf Panel
+    bookshelfPanel = new wxPanel(knowledgeSlideBook, wxID_ANY);
+    bookshelfPanel->SetBackgroundColour(wxColour("#0E0E0E"));
+    bookshelfSizer = new wxWrapSizer(wxHORIZONTAL);
+    bookshelfPanel->SetSizer(bookshelfSizer);
     
-    // Left pane: List of sections
-    listKnowledgeSections = new wxListBox(knowledgeContainer, ID_LIST_KNOWLEDGE_SECTIONS, wxDefaultPosition, wxSize(200, -1), 0, NULL, wxBORDER_NONE);
-    listKnowledgeSections->SetBackgroundColour(wxColour("#141416")); // slightly lighter than bg
-    listKnowledgeSections->SetForegroundColour(wxColour("#FFFFFF"));
-    listKnowledgeSections->SetFont(wxFont(11, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+    // Page 1: Open Book Panel
+    openBookPanel = new wxPanel(knowledgeSlideBook, wxID_ANY);
+    openBookPanel->SetBackgroundColour(wxColour("#0E0E0E"));
+    wxBoxSizer* openBookSizer = new wxBoxSizer(wxVERTICAL);
     
-    // Right pane: Auto & Manual Data
-    wxBoxSizer* rightPaneSizer = new wxBoxSizer(wxVERTICAL);
+    // Back button row (Tertiary / Ghost style)
+    btnKnowledgeBack = new CustomButton(openBookPanel, wxID_ANY, "←  " + lang.GetString("BACK"));
+    btnKnowledgeBack->SetBackgroundColour(wxColour("#0E0E0E")); // Match background to look transparent
+    btnKnowledgeBack->SetForegroundColour(wxColour("#A3A3A3")); // Muted ink
+    btnKnowledgeBack->SetHoverColour(wxColour("#F5F5F5")); // Brighten on hover
+    btnKnowledgeBack->SetFont(wxFont(12, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
+    btnKnowledgeBack->SetMinSize(wxSize(100, 30));
+    btnKnowledgeBack->Bind(wxEVT_BUTTON, &Windows::OnKnowledgeBackClick, this);
+    
+    openBookSizer->Add(btnKnowledgeBack, 0, wxALL, 20);
+    
+    lblKnowledgeSectionDesc = new wxStaticText(openBookPanel, wxID_ANY, "");
+    lblKnowledgeSectionDesc->SetForegroundColour(wxColour("#6B6B6B")); // Ink-subtle
+    lblKnowledgeSectionDesc->SetFont(wxFont(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+    openBookSizer->Add(lblKnowledgeSectionDesc, 0, wxLEFT | wxRIGHT | wxBOTTOM, 20);
+    
+    wxBoxSizer* rightPaneSizer = new wxBoxSizer(wxHORIZONTAL);
     
     // Auto-data Panel (Read-only)
-    wxPanel* autoDataPanel = new wxPanel(knowledgeContainer, wxID_ANY);
-    autoDataPanel->SetBackgroundColour(wxColour("#141416")); // Card background
+    wxPanel* autoDataPanel = new wxPanel(openBookPanel, wxID_ANY);
+    autoDataPanel->SetBackgroundColour(wxColour("#161616")); // Surface-elevated
     wxBoxSizer* autoDataSizer = new wxBoxSizer(wxVERTICAL);
     
     wxStaticText* lblAutoData = new wxStaticText(autoDataPanel, wxID_ANY, lang.GetString("AUTO_DISCOVERED_STATE"));
-    lblAutoData->SetForegroundColour(wxColour("#A1A1AA"));
+    lblAutoData->SetForegroundColour(wxColour("#F5F5F5")); // Ink
     lblAutoData->SetFont(wxFont(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
     
-    txtKnowledgeAutoData = new wxTextCtrl(autoDataPanel, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 150), wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
-    txtKnowledgeAutoData->SetBackgroundColour(wxColour("#141416"));
-    txtKnowledgeAutoData->SetForegroundColour(wxColour("#A1A1AA")); // Muted color for read-only
+    txtKnowledgeAutoData = new wxTextCtrl(autoDataPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
+    txtKnowledgeAutoData->SetBackgroundColour(wxColour("#050505")); // Surface-sunken
+    txtKnowledgeAutoData->SetForegroundColour(wxColour("#A3A3A3")); // Ink-muted for read-only
     txtKnowledgeAutoData->SetFont(wxFont(10, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
     
     autoDataSizer->Add(lblAutoData, 0, wxALL, 15);
@@ -940,22 +983,22 @@ void Windows::SetupUI() {
     autoDataPanel->SetSizer(autoDataSizer);
 
     // Manual Data Panel (Editable)
-    wxPanel* manualDataPanel = new wxPanel(knowledgeContainer, wxID_ANY);
-    manualDataPanel->SetBackgroundColour(wxColour("#18181B")); // Slightly different background
+    wxPanel* manualDataPanel = new wxPanel(openBookPanel, wxID_ANY);
+    manualDataPanel->SetBackgroundColour(wxColour("#161616")); // Surface-elevated
     wxBoxSizer* manualDataSizer = new wxBoxSizer(wxVERTICAL);
     
     wxStaticText* lblManualData = new wxStaticText(manualDataPanel, wxID_ANY, lang.GetString("MANUAL_ANNOTATIONS"));
-    lblManualData->SetForegroundColour(wxColour("#A1A1AA"));
+    lblManualData->SetForegroundColour(wxColour("#F5F5F5")); // Ink
     lblManualData->SetFont(wxFont(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
 
     txtKnowledgeData = new wxTextCtrl(manualDataPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxBORDER_NONE);
-    txtKnowledgeData->SetBackgroundColour(wxColour("#18181B"));
-    txtKnowledgeData->SetForegroundColour(wxColour("#E5E7EB"));
+    txtKnowledgeData->SetBackgroundColour(wxColour("#050505")); // Surface-sunken
+    txtKnowledgeData->SetForegroundColour(wxColour("#F5F5F5")); // Ink
     txtKnowledgeData->SetFont(wxFont(10, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL)); // Monospace font for JSON
     
     btnKnowledgeSave = new CustomButton(manualDataPanel, ID_BTN_KNOWLEDGE_SAVE, lang.GetString("SAVE_CHANGES"));
-    btnKnowledgeSave->SetBackgroundColour(wxColour("#4F46E5")); // Sleek primary color
-    btnKnowledgeSave->SetForegroundColour(wxColour("#FFFFFF"));
+    btnKnowledgeSave->SetBackgroundColour(wxColour("#5E6AD2")); // Refined Minimal Accent
+    btnKnowledgeSave->SetForegroundColour(wxColour("#F5F5F5")); // Ink on Accent
     btnKnowledgeSave->SetFont(btnFont);
 
     manualDataSizer->Add(lblManualData, 0, wxALL, 15);
@@ -963,13 +1006,16 @@ void Windows::SetupUI() {
     manualDataSizer->Add(btnKnowledgeSave, 0, wxALIGN_RIGHT | wxALL, 15);
     manualDataPanel->SetSizer(manualDataSizer);
 
-    rightPaneSizer->Add(autoDataPanel, 0, wxEXPAND | wxBOTTOM, 20); // Fixed height
-    rightPaneSizer->Add(manualDataPanel, 1, wxEXPAND); // Fills remaining space
+    rightPaneSizer->Add(autoDataPanel, 1, wxEXPAND | wxRIGHT, 20); 
+    rightPaneSizer->Add(manualDataPanel, 1, wxEXPAND);
     
-    knowledgeSplitSizer->Add(listKnowledgeSections, 0, wxEXPAND | wxRIGHT, 20);
-    knowledgeSplitSizer->Add(rightPaneSizer, 1, wxEXPAND);
+    openBookSizer->Add(rightPaneSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20);
+    openBookPanel->SetSizer(openBookSizer);
     
-    knowledgeSizer->Add(knowledgeSplitSizer, 1, wxEXPAND | wxALL, 30);
+    knowledgeSlideBook->AddPage(bookshelfPanel, "Bookshelf");
+    knowledgeSlideBook->AddPage(openBookPanel, "OpenBook");
+    knowledgeSizer->Add(knowledgeSlideBook, 1, wxEXPAND | wxALL, 0);
+    
     knowledgeContainer->SetSizer(knowledgeSizer);
     rootBook->AddPage(knowledgeContainer, "KnowledgeContainer");
     // ---------------------------------
@@ -1377,6 +1423,29 @@ void Windows::UpdateLanguage() {
     btnTabOverview->SetLabel(lang.GetString("TAB_OVERVIEW"));
     btnTabConnections->SetLabel(lang.GetString("TAB_CONNECTIONS"));
     btnTabLogs->SetLabel(lang.GetString("TAB_LOGS"));
+    
+    if (btnKnowledgeBack) btnKnowledgeBack->SetLabel("←  " + lang.GetString("BACK"));
+    
+    if (lblKnowledgeSectionDesc && !currentKnowledgeSection.empty()) {
+        wxString descKey = "DESC_" + wxString(currentKnowledgeSection).Upper();
+        wxString localizedDesc = lang.GetString(descKey.ToStdString());
+        if (localizedDesc == descKey) localizedDesc = "";
+        lblKnowledgeSectionDesc->SetLabel(localizedDesc);
+        lblKnowledgeSectionDesc->GetParent()->Layout();
+    }
+    
+    if (lblKnowledgeHeader) lblKnowledgeHeader->SetLabel(lang.GetString("KNOWLEDGE_BASE"));
+    if (lblKnowledgeSub) lblKnowledgeSub->SetLabel(lang.GetString("KNOWLEDGE_SUB"));
+    if (lblClusterTitle) lblClusterTitle->SetLabel(lang.GetString("CLUSTER_MANAGEMENT"));
+    if (lblClusterSub) lblClusterSub->SetLabel(lang.GetString("CLUSTER_SUB"));
+    if (lblToolsHeader) lblToolsHeader->SetLabel(lang.GetString("TOOLS_MANAGEMENT"));
+    if (lblToolsSub) lblToolsSub->SetLabel(lang.GetString("TOOLS_SUB"));
+    if (lblGsHeader) lblGsHeader->SetLabel(lang.GetString("GLOBAL_SETTINGS"));
+    if (lblTokenTitle) lblTokenTitle->SetLabel(lang.GetString("LBL_TOKENS"));
+    if (lblChkTitle) lblChkTitle->SetLabel(lang.GetString("LBL_NET_CHECK"));
+    if (lblLogsHeader) lblLogsHeader->SetLabel(lang.GetString("LBL_SERVER_LOGS"));
+    if (lblCurrentVersion) lblCurrentVersion->SetLabel(lang.GetString("LBL_VERSION") + APP_VERSION);
+    if (lblNetworkInstructions) lblNetworkInstructions->SetLabel(lang.GetString("NETWORK_INSTRUCTIONS"));
 
     lblManager->SetLabel(lang.GetString("SERVER_MANAGER"));
     lblStatus->SetLabel(lang.GetString("STATUS"));
@@ -1401,13 +1470,14 @@ void Windows::UpdateLanguage() {
     chkCreateMissing->SetLabel(lang.GetString("CREATE_IF_MISSING"));
     chkCreateMissing->InvalidateBestSize(); // Fix truncation on Linux
     
-    lblSecSystem->SetLabel(lang.GetString("GS_SYSTEM"));
-    lblSecStorage->SetLabel(lang.GetString("GS_STORAGE"));
+    if (lblSecSystem) lblSecSystem->SetLabel(lang.GetString("GS_SYSTEM"));
+    if (lblSecStorage) lblSecStorage->SetLabel(lang.GetString("GS_STORAGE"));
     if (lblSecAppearance) lblSecAppearance->SetLabel(lang.GetString("GS_APPEARANCE"));
     if (lblSecSecurity) lblSecSecurity->SetLabel(lang.GetString("GS_SECURITY"));
     if (lblSecUpdates) lblSecUpdates->SetLabel(lang.GetString("GS_UPDATES"));
     if (lblSecLanguage) lblSecLanguage->SetLabel(lang.GetString("GS_LANGUAGE"));
     if (lblSecWorkspace) lblSecWorkspace->SetLabel(lang.GetString("GS_WORKSPACE"));
+    if (lblLogRetention) lblLogRetention->SetLabel(lang.GetString("GS_LOG_RETENTION"));
     
     chkLaunchOnStartup->SetLabel(lang.GetString("GS_LAUNCH_STARTUP"));
     if (chkAutoStartServer) chkAutoStartServer->SetLabel(lang.GetString("GS_AUTO_START_SERVER"));
@@ -1506,96 +1576,129 @@ void Windows::OnSidebarTools(wxCommandEvent& event) {
 }
 
 void Windows::OnSidebarKnowledge(wxCommandEvent& event) {
-    if (rootBook->GetSelection() == 3) return;
+    if (rootBook->GetSelection() == 3) {
+        // If already in the Knowledge Base, reset to the Bookshelf view
+        if (knowledgeSlideBook && knowledgeSlideBook->GetSelection() != 0) {
+            knowledgeSlideBook->ChangeSelection(0);
+        }
+        return;
+    }
     CancelSidebarAnimation();
     UpdateSidebarSelection(btnKnowledge);
     rootBook->ChangeSelection(3); // KnowledgeContainer
     UpdateTabSelection(nullptr);
     
-    // Refresh sections
-    listKnowledgeSections->Clear();
+    // Refresh Bookshelf
+    bookshelfSizer->Clear(true);
+    
     auto sections = KnowledgeLayer::GetInstance().GetSections();
     for (const auto& s : sections) {
         wxString key = "SECTION_" + wxString(s).Upper();
         wxString localizedName = LanguageManager::Get().GetString(key.ToStdString());
         if (localizedName == key) localizedName = wxString(s); // Fallback to raw key
-        listKnowledgeSections->Append(localizedName, new wxStringClientData(s));
+        
+        CustomButton* btn = new CustomButton(bookshelfPanel, wxID_ANY, localizedName);
+        btn->SetBackgroundColour(wxColour("#0E0E0E")); // Card surface background
+        btn->SetCardMode(true);
+        btn->SetHoverColour(wxColour("#5E6AD2")); // Accent highlight on hover
+        btn->SetForegroundColour(wxColour("#F5F5F5"));
+        wxFont btnFont(12, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
+        btn->SetFont(btnFont);
+        btn->SetMinSize(wxSize(200, 150)); // Bookshelf card size
+        btn->SetBorderRadius(8);
+        btn->SetAlignment(wxALIGN_CENTER); // Center text cleanly
+        btn->SetClientObject(new wxStringClientData(s));
+        btn->Bind(wxEVT_BUTTON, &Windows::OnKnowledgeCardClick, this);
+        bookshelfSizer->Add(btn, 0, wxALL, 15);
     }
+    bookshelfPanel->Layout();
+    
     txtKnowledgeAutoData->Clear();
     txtKnowledgeData->Clear();
+    
+    // Ensure we start at the Bookshelf view
+    knowledgeSlideBook->ChangeSelection(0);
 }
 
-void Windows::OnKnowledgeSectionSelect(wxCommandEvent& event) {
-    int sel = listKnowledgeSections->GetSelection();
-    if (sel != wxNOT_FOUND) {
-        wxStringClientData* clientData = (wxStringClientData*)listKnowledgeSections->GetClientObject(sel);
-        if (!clientData) return;
-        std::string section = clientData->GetData().ToStdString();
-        
-        // Update description label
-        wxString descKey = "DESC_" + wxString(section).Upper();
-        wxString localizedDesc = LanguageManager::Get().GetString(descKey.ToStdString());
-        if (localizedDesc == descKey) localizedDesc = "";
-        if (lblKnowledgeSectionDesc) {
-            lblKnowledgeSectionDesc->SetLabel(localizedDesc);
-            lblKnowledgeSectionDesc->GetParent()->Layout();
-        }
-        // Auto-discovered data logic
-        nlohmann::json autoData = nlohmann::json::object();
-        if (section == "server") {
-            autoData["hostname"] = wxGetHostName().ToStdString();
-            autoData["os_description"] = wxGetOsDescription().ToStdString();
-            autoData["user_id"] = wxGetUserId().ToStdString();
-            autoData["free_memory_mb"] = wxGetFreeMemory().ToDouble() / (1024 * 1024);
-            autoData["cpu_cores"] = wxThread::GetCPUCount();
-            autoData["workspace_dir"] = wxGetCwd().ToStdString();
-        } else if (section == "cluster") {
-            auto nodes = ClusterManager::GetInstance().GetNodes();
-            autoData["total_nodes"] = nodes.size();
-            autoData["nodes"] = nlohmann::json::array();
-            for (const auto& node : nodes) {
-                nlohmann::json n;
-                n["id"] = node.id;
-                n["hostname"] = node.hostname;
-                n["ip_address"] = node.ip_address;
-                n["local_ip"] = node.local_ip;
-                n["status"] = node.status;
-                n["platform"] = node.platform;
-                n["os_version"] = node.os_version;
-                n["app_version"] = node.app_version;
-                autoData["nodes"].push_back(n);
-            }
-        } else if (section == "applications") {
-            autoData = AutoDiscovery::GetDiscoveredApplications();
-        } else {
-            autoData["info"] = "No auto-discovered data available for this section.";
-        }
-        txtKnowledgeAutoData->SetValue(autoData.dump(4));
-        
-        // Manual annotations logic
-        nlohmann::json data = KnowledgeLayer::GetInstance().GetSection(section);
-        if (data.is_null() || data.empty()) {
-            txtKnowledgeData->SetValue("{\n    // Add your " + section + " information here\n    \n}");
-        } else {
-            txtKnowledgeData->SetValue(data.dump(4));
-        }
+void Windows::OnKnowledgeCardClick(wxCommandEvent& event) {
+    wxWindow* btn = dynamic_cast<wxWindow*>(event.GetEventObject());
+    if (!btn) return;
+    
+    wxStringClientData* clientData = dynamic_cast<wxStringClientData*>(btn->GetClientObject());
+    if (!clientData) return;
+    
+    std::string section = clientData->GetData().ToStdString();
+    currentKnowledgeSection = section; // Store for Save button
+    
+    // Update description label
+    wxString descKey = "DESC_" + wxString(section).Upper();
+    wxString localizedDesc = LanguageManager::Get().GetString(descKey.ToStdString());
+    if (localizedDesc == descKey) localizedDesc = "";
+    if (lblKnowledgeSectionDesc) {
+        lblKnowledgeSectionDesc->SetLabel(localizedDesc);
+        lblKnowledgeSectionDesc->GetParent()->Layout();
     }
+    
+    // Auto-discovered data logic
+    nlohmann::json autoData = nlohmann::json::object();
+    if (section == "server") {
+        autoData["hostname"] = wxGetHostName().ToStdString();
+        autoData["os_description"] = wxGetOsDescription().ToStdString();
+        autoData["user_id"] = wxGetUserId().ToStdString();
+        autoData["free_memory_mb"] = wxGetFreeMemory().ToDouble() / (1024 * 1024);
+        autoData["cpu_cores"] = wxThread::GetCPUCount();
+        autoData["workspace_dir"] = wxGetCwd().ToStdString();
+    } else if (section == "cluster") {
+        auto nodes = ClusterManager::GetInstance().GetNodes();
+        autoData["total_nodes"] = nodes.size();
+        autoData["nodes"] = nlohmann::json::array();
+        for (const auto& node : nodes) {
+            nlohmann::json n;
+            n["id"] = node.id;
+            n["hostname"] = node.hostname;
+            n["ip_address"] = node.ip_address;
+            n["local_ip"] = node.local_ip;
+            n["status"] = node.status;
+            n["platform"] = node.platform;
+            n["os_version"] = node.os_version;
+            n["app_version"] = node.app_version;
+            autoData["nodes"].push_back(n);
+        }
+    } else if (section == "applications") {
+        autoData = AutoDiscovery::GetDiscoveredApplications();
+    } else {
+        autoData["info"] = "No auto-discovered data available for this section.";
+    }
+    txtKnowledgeAutoData->SetValue(autoData.dump(4));
+    
+    // Manual annotations logic
+    nlohmann::json data = KnowledgeLayer::GetInstance().GetSection(section);
+    if (data.is_null() || data.empty()) {
+        txtKnowledgeData->SetValue("{\n    // Add your " + section + " information here\n    \n}");
+    } else {
+        txtKnowledgeData->SetValue(data.dump(4));
+    }
+    
+    // Slide to open book view
+    knowledgeSlideBook->ChangeSelection(1);
+}
+
+void Windows::OnKnowledgeBackClick(wxCommandEvent& event) {
+    knowledgeSlideBook->ChangeSelection(0);
 }
 
 void Windows::OnKnowledgeSave(wxCommandEvent& event) {
-    int sel = listKnowledgeSections->GetSelection();
-    if (sel == wxNOT_FOUND) {
-        wxMessageBox("Please select a section first.", "Error", wxICON_ERROR);
+    if (currentKnowledgeSection.empty()) {
+        wxMessageBox("No section selected.", "Error", wxICON_ERROR);
         return;
     }
     
-    std::string section = listKnowledgeSections->GetString(sel).ToStdString();
     std::string rawData = txtKnowledgeData->GetValue().ToStdString();
     
     try {
         nlohmann::json parsed = nlohmann::json::parse(rawData);
-        KnowledgeLayer::GetInstance().UpdateSection(section, parsed);
-        wxMessageBox("Changes saved successfully to '" + section + "'.", "Success", wxICON_INFORMATION);
+        KnowledgeLayer::GetInstance().UpdateSection(currentKnowledgeSection, parsed);
+        wxMessageBox("Changes saved successfully to '" + currentKnowledgeSection + "'.", "Success", wxICON_INFORMATION);
     } catch (const std::exception& e) {
         wxMessageBox(std::string("Invalid JSON format:\n") + e.what(), "Parse Error", wxICON_ERROR);
     }
@@ -1829,6 +1932,14 @@ void Windows::OnTimer(wxTimerEvent& event) {
         statUptime->SetLabel(lang.GetString("STATS_UPTIME") + wxString::Format("%ds", uptimeSeconds.load()));
         statSessions->SetLabel(lang.GetString("STATS_SESSIONS") + wxString::Format("%d", g_active_sessions.load()));
         statTools->SetLabel(lang.GetString("STATS_TOOLS") + wxString::Format("%d", g_tool_calls.load()));
+    }
+    
+    if (pageConnections && pageConnections->IsShownOnScreen() && gridTokens && gridTokens->GetNumberRows() > 0) {
+        for (int i = 0; i < gridTokens->GetNumberRows(); ++i) {
+            wxString id = gridTokens->GetCellValue(i, 1);
+            int sessions = get_sessions_for_token(id.ToStdString());
+            gridTokens->SetCellValue(i, 5, wxString::Format("%d", sessions));
+        }
     }
     
     if (sysStatsPanel && sysStatsPanel->IsShownOnScreen()) {
@@ -2542,7 +2653,7 @@ wxBEGIN_EVENT_TABLE(Windows, wxFrame)
     EVT_BUTTON(ID_BTN_TAB_LOGS,      Windows::OnTabLogs)
     EVT_BUTTON(ID_BTN_STARTSTOP, Windows::OnStartStop)
     
-    EVT_LISTBOX(ID_LIST_KNOWLEDGE_SECTIONS, Windows::OnKnowledgeSectionSelect)
+
     EVT_BUTTON(ID_BTN_KNOWLEDGE_SAVE, Windows::OnKnowledgeSave)
     
     EVT_TIMER(ID_TIMER,          Windows::OnTimer)
@@ -2666,4 +2777,38 @@ void Windows::OnToggleTheme(wxCommandEvent& event) {
     // In a real app we'd refresh the entire UI palette here.
     // For now we just save the setting since full dynamic theming in wxWidgets is complex.
     wxMessageBox("Theme changed to " + sm.theme + ". Please restart the application to apply full theme changes.", "Theme Changed", wxOK | wxICON_INFORMATION);
+}
+
+void Windows::OnMcpConfirmRequest(wxThreadEvent& event) {
+    std::string req_id = event.GetString().ToStdString();
+    auto req = ConfirmationManager::GetInstance().GetRequest(req_id);
+    if (!req) return;
+
+    bool approved = false;
+
+    if (req->level == DangerLevel::HIGH) {
+        wxString msg = wxString::Format(
+            "Token '%s' is requesting permission to execute a HIGH danger action:\n\n%s\n\nDo you want to allow this action?",
+            req->token_name, req->action_description
+        );
+        int res = wxMessageBox(msg, "Security Warning - Action Requested", wxYES_NO | wxNO_DEFAULT | wxICON_EXCLAMATION, this);
+        approved = (res == wxYES);
+    } else if (req->level == DangerLevel::MAX) {
+        wxString msg = wxString::Format(
+            "Token '%s' is requesting permission to execute a MAX danger action:\n\n%s\n\nThis action is extremely dangerous. To allow it, type 'confirm' below:",
+            req->token_name, req->action_description
+        );
+        wxTextEntryDialog dialog(this, msg, "CRITICAL Security Warning");
+        if (dialog.ShowModal() == wxID_OK) {
+            if (dialog.GetValue().Lower() == "confirm") {
+                approved = true;
+            } else {
+                wxMessageBox("Confirmation text did not match 'confirm'. Action denied.", "Action Denied", wxOK | wxICON_ERROR);
+            }
+        }
+    } else {
+        approved = true; // LOW is auto-approved if it ever reaches here
+    }
+
+    ConfirmationManager::GetInstance().ResolveConfirmation(req_id, approved);
 }

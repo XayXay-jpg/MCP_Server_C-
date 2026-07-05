@@ -184,7 +184,10 @@ private:
         dictionary["EN"]["UPD_NONE"] = wxString::FromUTF8("No releases found on GitHub.");
         dictionary["EN"]["UPD_ERR_NET"] = wxString::FromUTF8("Failed to check for updates (network error).");
         dictionary["EN"]["UPD_ERR_PARSE"] = wxString::FromUTF8("Error parsing update information.");
-
+        
+        dictionary["EN"]["CLUSTER"] = wxString::FromUTF8("FAMILY GROUP");
+        dictionary["EN"]["LBL_NOT_DETECTED"] = wxString::FromUTF8("Not detected");
+        
         // RU
         dictionary["RU"]["DASHBOARD"] = wxString::FromUTF8("ДЭШБОРД");
         dictionary["RU"]["WORKSPACE"] = wxString::FromUTF8("ДИРЕКТОРИЯ");
@@ -305,6 +308,26 @@ private:
         dictionary["RU"]["BTN_DELETE_TOKEN"] = wxString::FromUTF8("Удалить Токен");
         dictionary["RU"]["BTN_TOGGLE_TOKEN"] = wxString::FromUTF8("Вкл/Выкл");
         dictionary["RU"]["BTN_EDIT_PERMISSIONS"] = wxString::FromUTF8("Права Доступа");
+        dictionary["EN"]["ROLE_ADMIN"] = "Admin";
+        dictionary["RU"]["ROLE_ADMIN"] = wxString::FromUTF8("Администратор");
+        dictionary["EN"]["ROLE_DEVELOPER"] = "Developer";
+        dictionary["RU"]["ROLE_DEVELOPER"] = wxString::FromUTF8("Разработчик");
+        dictionary["EN"]["ROLE_INTERN"] = "Intern";
+        dictionary["RU"]["ROLE_INTERN"] = wxString::FromUTF8("Стажер");
+        dictionary["EN"]["ROLE_OBSERVER"] = "Observer";
+        dictionary["RU"]["ROLE_OBSERVER"] = wxString::FromUTF8("Наблюдатель");
+        dictionary["EN"]["ROLE_AUTOMATION"] = "Automation";
+        dictionary["RU"]["ROLE_AUTOMATION"] = wxString::FromUTF8("Автоматизация");
+        dictionary["EN"]["ROLE_RESTRICTED_AI"] = "Restricted AI";
+        dictionary["RU"]["ROLE_RESTRICTED_AI"] = wxString::FromUTF8("Ограниченный ИИ");
+        dictionary["EN"]["ROLE_CUSTOM"] = "Custom";
+        dictionary["RU"]["ROLE_CUSTOM"] = wxString::FromUTF8("Пользовательский");
+        dictionary["EN"]["LBL_PRESETS"] = "Presets:";
+        dictionary["RU"]["LBL_PRESETS"] = wxString::FromUTF8("Шаблон:");
+        dictionary["EN"]["LBL_OVERSEER"] = "Overseer:";
+        dictionary["RU"]["LBL_OVERSEER"] = wxString::FromUTF8("Наблюдатель:");
+        dictionary["EN"]["BTN_APPLY_ROLE"] = "Apply Role";
+        dictionary["RU"]["BTN_APPLY_ROLE"] = wxString::FromUTF8("Применить");
         
         dictionary["RU"]["LBL_CPU"] = wxString::FromUTF8("ЦП");
         dictionary["RU"]["LBL_RAM"] = wxString::FromUTF8("ОЗУ");
@@ -321,6 +344,26 @@ private:
         dictionary["RU"]["BTN_CREATE_TOKEN"] = wxString::FromUTF8("Создать Токен");
         dictionary["RU"]["BTN_TOGGLE_TOKEN"] = wxString::FromUTF8("Вкл/Выкл");
         dictionary["RU"]["BTN_EDIT_PERMISSIONS"] = wxString::FromUTF8("Права Доступа");
+        dictionary["EN"]["ROLE_ADMIN"] = "Admin";
+        dictionary["RU"]["ROLE_ADMIN"] = wxString::FromUTF8("Администратор");
+        dictionary["EN"]["ROLE_DEVELOPER"] = "Developer";
+        dictionary["RU"]["ROLE_DEVELOPER"] = wxString::FromUTF8("Разработчик");
+        dictionary["EN"]["ROLE_INTERN"] = "Intern";
+        dictionary["RU"]["ROLE_INTERN"] = wxString::FromUTF8("Стажер");
+        dictionary["EN"]["ROLE_OBSERVER"] = "Observer";
+        dictionary["RU"]["ROLE_OBSERVER"] = wxString::FromUTF8("Наблюдатель");
+        dictionary["EN"]["ROLE_AUTOMATION"] = "Automation";
+        dictionary["RU"]["ROLE_AUTOMATION"] = wxString::FromUTF8("Автоматизация");
+        dictionary["EN"]["ROLE_RESTRICTED_AI"] = "Restricted AI";
+        dictionary["RU"]["ROLE_RESTRICTED_AI"] = wxString::FromUTF8("Ограниченный ИИ");
+        dictionary["EN"]["ROLE_CUSTOM"] = "Custom";
+        dictionary["RU"]["ROLE_CUSTOM"] = wxString::FromUTF8("Пользовательский");
+        dictionary["EN"]["LBL_PRESETS"] = "Presets:";
+        dictionary["RU"]["LBL_PRESETS"] = wxString::FromUTF8("Шаблон:");
+        dictionary["EN"]["LBL_OVERSEER"] = "Overseer:";
+        dictionary["RU"]["LBL_OVERSEER"] = wxString::FromUTF8("Наблюдатель:");
+        dictionary["EN"]["BTN_APPLY_ROLE"] = "Apply Role";
+        dictionary["RU"]["BTN_APPLY_ROLE"] = wxString::FromUTF8("Применить");
         dictionary["RU"]["BTN_COPY_TOKEN_URL"] = wxString::FromUTF8("Копировать URL Токена");
         dictionary["RU"]["LBL_NET_CHECK"] = wxString::FromUTF8("ПРОВЕРКА СЕТИ");
         dictionary["RU"]["BTN_CHECK"] = wxString::FromUTF8("Проверить");
@@ -340,6 +383,9 @@ private:
         dictionary["RU"]["UPD_NONE"] = wxString::FromUTF8("Релизы на GitHub не найдены.");
         dictionary["RU"]["UPD_ERR_NET"] = wxString::FromUTF8("Ошибка проверки обновлений (ошибка сети).");
         dictionary["RU"]["UPD_ERR_PARSE"] = wxString::FromUTF8("Ошибка разбора информации об обновлении.");
+        
+        dictionary["EN"]["BACK"] = wxString::FromUTF8("Back");
+        dictionary["RU"]["BACK"] = wxString::FromUTF8("Назад");
     }
 
     std::string current_lang = "RU";

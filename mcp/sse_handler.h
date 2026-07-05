@@ -22,4 +22,7 @@ extern std::map<std::string, std::shared_ptr<Session>> active_sessions;
 
 void send_to_session(const std::string& session_id, const nlohmann::json& response);
 void notify_tools_changed();
+void notify_knowledge_changed(const std::string& session_id = "");
+void notify_server_state_changed();
 int get_sessions_for_token(const std::string& token_id);
+void stop_all_sessions();

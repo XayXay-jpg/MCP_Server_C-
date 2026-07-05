@@ -69,6 +69,7 @@ std::unique_ptr<httplib::Server> g_svr;
 
 void stop_mcp_server() {
     ClusterManager::GetInstance().StopHealthCheckTask();
+    stop_all_sessions();
     if (g_svr) {
         g_svr->stop();
     }
@@ -230,9 +231,6 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
         }
 
         mcp_log("[Info] New SSE connection. SessionID: " + session_id + " | Token: " + token_display);
-        if (g_notify_callback) {
-            g_notify_callback("New Connection (SSE)", "Token: " + token_display);
-        }
 
         res.set_chunked_content_provider(
             "text/event-stream",
@@ -403,7 +401,7 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
         }
         
         mcp_log("[Info] POST Request from Token: " + token_display);
-        mcp_log("[Info] Raw Payload: " + req.body);
+        mcp_log("[Info] Raw Payload: " + actual_body);
         
         // Child server: log incoming tool requests from parent
         if (is_child_mode && has_token == false && req.has_header("X-MCP-Signature")) {
@@ -413,15 +411,10 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                 if (method == "tools/call" && peek.contains("params")) {
                     std::string tool_name = peek["params"].value("name", "unknown");
                     mcp_log("[Child] Incoming tool request from Parent (" + req.remote_addr + "): " + tool_name);
-                    if (g_notify_callback) g_notify_callback("Tool Called by Parent", "Tool: " + tool_name + " from " + req.remote_addr);
                 }
             } catch (...) {}
         }
         
-        if (is_direct_post && g_notify_callback) {
-            g_notify_callback("New Connection (POST)", "Token: " + token_display);
-        }
-
         try {
             json request = json::parse(actual_body);
             if (request.contains("_forwarded_token_enc")) {
@@ -444,6 +437,9 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                 } else if (method == "tools/call") {
                     result = handle_tools_call(request, current_token);
                 } else if (method == "notifications/initialized" || method == "ping") {
+                    if (method == "notifications/initialized" && !session_id.empty()) {
+                        notify_knowledge_changed(session_id);
+                    }
                     if (request.contains("id")) {
                         result = {
                             {"jsonrpc", "2.0"},

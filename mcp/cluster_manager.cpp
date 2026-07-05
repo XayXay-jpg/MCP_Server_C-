@@ -79,6 +79,7 @@ void ClusterManager::SaveNodes() {
     
     // Notify AI clients about topology change
     notify_tools_changed();
+    notify_server_state_changed();
 }
 
 std::string GenerateRandomString(size_t length) {
@@ -249,13 +250,32 @@ bool ClusterManager::ApproveNode(const std::string& id) {
         auto tokens = NetworkUtils::LoadTokens();
         json tokens_array = json::array();
         for (const auto& t : tokens) {
-            tokens_array.push_back({
-                {"id", t.id},
-                {"name", t.name},
-                {"raw_token", t.raw_token},
-                {"creation_date", t.creation_date},
-                {"active", t.active}
-            });
+            bool has_access = false;
+            
+            // Admins have "*" access, custom may have specific node access
+            if (t.permissions.allowed_servers.count("*")) {
+                has_access = true;
+            } else if (t.permissions.allowed_servers.count(id)) {
+                has_access = true;
+            } else {
+                // Check if any server ID is "*" (global wildcard)
+                for (const auto& kv : t.permissions.allowed_servers) {
+                    if (kv.first == "*") {
+                        has_access = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (has_access) {
+                tokens_array.push_back({
+                    {"id", t.id},
+                    {"name", t.name},
+                    {"raw_token", t.raw_token},
+                    {"creation_date", t.creation_date},
+                    {"active", t.active}
+                });
+            }
         }
         std::string encrypted_tokens = encrypt_aes256(final_ek, tokens_array.dump());
 

@@ -7,6 +7,7 @@
 #include "utils.h"
 #include "server.h"
 #include "../gui/sys_stats.h"
+#include "confirmation_manager.h"
 
 #ifndef _WIN32
 #include <unistd.h>
@@ -194,5 +195,50 @@ void register_cluster_endpoints(httplib::Server& svr) {
         };
         res.status = 200;
         res.set_content(resp.dump(), "application/json");
+    });
+
+    svr.Post("/cluster/request_approval", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            json data = json::parse(req.body);
+            if (!data.contains("encrypted_payload")) {
+                res.status = 400;
+                res.set_content("Missing encrypted payload", "text/plain");
+                return;
+            }
+            std::string enc = data["encrypted_payload"];
+            
+            std::string dec;
+            if (SettingsManager::Get().appMode == "Child Node") {
+                dec = decrypt_aes256(SettingsManager::Get().parentEncryptionKey, enc);
+            } else {
+                for (const auto& node : ClusterManager::GetInstance().GetNodes()) {
+                    dec = decrypt_aes256(node.encryption_key, enc);
+                    if (!dec.empty()) break;
+                }
+            }
+            
+            if (dec.empty()) {
+                res.status = 401;
+                res.set_content("Decryption failed", "text/plain");
+                return;
+            }
+            
+            json dec_json = json::parse(dec);
+            std::string token_name = dec_json.value("token_name", "Unknown");
+            std::string action = dec_json.value("action", "Unknown Action");
+            int level_int = dec_json.value("level", 1);
+            DangerLevel level = static_cast<DangerLevel>(level_int);
+            
+            bool approved = ConfirmationManager::GetInstance().RequestConfirmation(token_name, action, level);
+            if (approved) {
+                res.status = 200;
+                res.set_content("{\"status\":\"approved\"}", "application/json");
+            } else {
+                res.status = 403;
+                res.set_content("{\"status\":\"denied\"}", "application/json");
+            }
+        } catch (...) {
+            res.status = 400;
+        }
     });
 }

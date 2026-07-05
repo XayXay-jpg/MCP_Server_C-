@@ -80,6 +80,8 @@ std::vector<TokenInfo> NetworkUtils::LoadTokens() {
             t.raw_token = item.value("raw_token", "");
             t.creation_date = item.value("creation_date", "");
             t.active = item.value("active", false);
+            t.role = item.value("role", "Developer");
+            t.overseer_node_id = item.value("overseer_node_id", "");
             if (item.contains("permissions")) {
                 if (item["permissions"].contains("servers") && item["permissions"]["servers"].is_object()) {
                     for (auto& [server_id, tools_val] : item["permissions"]["servers"].items()) {
@@ -92,6 +94,13 @@ std::vector<TokenInfo> NetworkUtils::LoadTokens() {
                     for (auto& [server_id, ws_val] : item["permissions"]["server_workspaces"].items()) {
                         if (ws_val.is_string()) {
                             t.permissions.server_workspaces[server_id] = ws_val.get<std::string>();
+                        }
+                    }
+                }
+                if (item["permissions"].contains("requires_confirmation") && item["permissions"]["requires_confirmation"].is_object()) {
+                    for (auto& [server_id, conf_val] : item["permissions"]["requires_confirmation"].items()) {
+                        if (conf_val.is_array()) {
+                            t.permissions.requires_confirmation[server_id] = conf_val.get<std::vector<std::string>>();
                         }
                     }
                 }
@@ -114,9 +123,12 @@ void NetworkUtils::SaveTokens(const std::vector<TokenInfo>& tokens) {
             {"raw_token", t.raw_token},
             {"creation_date", t.creation_date},
             {"active", t.active},
+            {"role", t.role},
+            {"overseer_node_id", t.overseer_node_id},
             {"permissions", {
                 {"servers", t.permissions.allowed_servers},
                 {"server_workspaces", t.permissions.server_workspaces},
+                {"requires_confirmation", t.permissions.requires_confirmation},
                 {"allowed_tasks", t.permissions.allowed_tasks}
             }}
         });

@@ -14,6 +14,7 @@
 
 wxDECLARE_EVENT(wxEVT_SERVER_LOG, wxThreadEvent);
 wxDECLARE_EVENT(wxEVT_SERVER_NOTIFY, wxThreadEvent);
+wxDECLARE_EVENT(wxEVT_MCP_CONFIRM_REQUEST, wxThreadEvent);
 
 class AnimatedLogo : public wxPanel {
 public:
@@ -93,18 +94,26 @@ private:
     
     wxPanel* toolsContainer; // Holds Tools page
     wxStaticText* lblToolsHeader = nullptr;
+    wxStaticText* lblToolsSub = nullptr;
     wxScrolledWindow* scrollTools = nullptr;
     wxBoxSizer* scrollToolsSizer = nullptr;
     wxPanel* globalSettingsContainer; // Holds pageGlobalSettings
     
     wxPanel* knowledgeContainer;
+    SlideBook* knowledgeSlideBook = nullptr;
+    wxPanel* bookshelfPanel = nullptr;
+    wxBoxSizer* bookshelfSizer = nullptr;
+    wxPanel* openBookPanel = nullptr;
+    
+    std::string currentKnowledgeSection;
+    
     wxStaticText* lblKnowledgeHeader = nullptr;
+    wxStaticText* lblKnowledgeSub = nullptr;
     wxStaticText* lblKnowledgeSectionDesc = nullptr;
-    wxListBox* listKnowledgeSections = nullptr;
-    wxTextCtrl* txtKnowledgeAutoData = nullptr; // New auto-data panel
+    wxTextCtrl* txtKnowledgeAutoData = nullptr;
     wxTextCtrl* txtKnowledgeData = nullptr;
     CustomButton* btnKnowledgeSave = nullptr;
-    
+    CustomButton* btnKnowledgeBack = nullptr;
     SlideBook* contentBook; // Holds server tabs (Overview, Connections, Logs)
     
     // Pages
@@ -236,12 +245,14 @@ private:
     
     void OnToolToggled(wxCommandEvent& event);
 
-    void OnKnowledgeSectionSelect(wxCommandEvent& event);
+    void OnKnowledgeCardClick(wxCommandEvent& event);
+    void OnKnowledgeBackClick(wxCommandEvent& event);
     void OnKnowledgeSave(wxCommandEvent& event);
 
     void OnStartStop(wxCommandEvent& event);
     void OnServerLog(wxThreadEvent& event);
     void OnServerNotify(wxThreadEvent& event);
+    void OnMcpConfirmRequest(wxThreadEvent& event);
     void OnTimer(wxTimerEvent& event);
     
     void OnBrowseWorkspace(wxCommandEvent& event);

@@ -15,7 +15,7 @@ wxEND_EVENT_TABLE()
 CustomButton::CustomButton(wxWindow* parent, wxWindowID id, const wxString& label, const wxPoint& pos, const wxSize& size)
     : wxPanel(parent, id, pos, size, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE),
       m_label(label), m_isHovered(false), m_isPressed(false), m_isSelected(false),
-      m_indent(0), m_treeLineMode(0), m_borderRadius(4), m_alignment(wxALIGN_LEFT)
+      m_indent(0), m_treeLineMode(0), m_borderRadius(4), m_alignment(wxALIGN_LEFT), m_cardMode(false)
 {
     m_bgColour = wxColour("#E8F1F2");
     m_fgColour = wxColour("#13293D");
@@ -104,6 +104,11 @@ void CustomButton::SetAlignment(int align) {
     Refresh();
 }
 
+void CustomButton::SetCardMode(bool cardMode) {
+    m_cardMode = cardMode;
+    Refresh();
+}
+
 void CustomButton::OnPaint(wxPaintEvent& event) {
     wxPaintDC paintDC(this);
     
@@ -131,22 +136,42 @@ void CustomButton::OnPaint(wxPaintEvent& event) {
 
     // Draw background with hover fade
     wxColour drawColor = m_bgColour;
-    if (m_isPressed) {
-        drawColor = m_bgColour.ChangeLightness(80);
-    } else if (m_isSelected) {
-        drawColor = wxColour("#1F1F24"); // Highlight color for active tab in SaaS style
-    } else if (m_hoverProgress > 0.0) {
-        int r = m_bgColour.Red() + (m_hoverColour.Red() - m_bgColour.Red()) * m_hoverProgress;
-        int g = m_bgColour.Green() + (m_hoverColour.Green() - m_bgColour.Green()) * m_hoverProgress;
-        int b = m_bgColour.Blue() + (m_hoverColour.Blue() - m_bgColour.Blue()) * m_hoverProgress;
-        drawColor = wxColour(r, g, b);
-    }
-
-    // Only draw background if it's not transparent, or if it's hovered/selected
-    if (m_bgColour.Alpha() > 0 || m_hoverProgress > 0.0 || m_isSelected || m_isPressed) {
+    
+    if (m_cardMode) {
+        wxColour borderColor = wxColour("#262626"); // hairline
+        if (m_isPressed) {
+            borderColor = m_hoverColour;
+            drawColor = m_bgColour.ChangeLightness(110);
+        } else if (m_hoverProgress > 0.0) {
+            int r = borderColor.Red() + (m_hoverColour.Red() - borderColor.Red()) * m_hoverProgress;
+            int g = borderColor.Green() + (m_hoverColour.Green() - borderColor.Green()) * m_hoverProgress;
+            int b = borderColor.Blue() + (m_hoverColour.Blue() - borderColor.Blue()) * m_hoverProgress;
+            borderColor = wxColour(r, g, b);
+            // Slight lift in background
+            drawColor = m_bgColour.ChangeLightness(100 + (5 * m_hoverProgress));
+        }
+        
         dc.SetBrush(wxBrush(drawColor));
-        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.SetPen(wxPen(borderColor, 1));
         dc.DrawRoundedRectangle(x, 0, w, size.y, m_borderRadius);
+    } else {
+        if (m_isPressed) {
+            drawColor = m_bgColour.ChangeLightness(80);
+        } else if (m_isSelected) {
+            drawColor = wxColour("#1F1F24"); // Highlight color for active tab in SaaS style
+        } else if (m_hoverProgress > 0.0) {
+            int r = m_bgColour.Red() + (m_hoverColour.Red() - m_bgColour.Red()) * m_hoverProgress;
+            int g = m_bgColour.Green() + (m_hoverColour.Green() - m_bgColour.Green()) * m_hoverProgress;
+            int b = m_bgColour.Blue() + (m_hoverColour.Blue() - m_bgColour.Blue()) * m_hoverProgress;
+            drawColor = wxColour(r, g, b);
+        }
+
+        // Only draw background if it's not transparent, or if it's hovered/selected
+        if (m_bgColour.Alpha() > 0 || m_hoverProgress > 0.0 || m_isSelected || m_isPressed) {
+            dc.SetBrush(wxBrush(drawColor));
+            dc.SetPen(*wxTRANSPARENT_PEN);
+            dc.DrawRoundedRectangle(x, 0, w, size.y, m_borderRadius);
+        }
     }
     
     // Draw left accent bar for selected item
@@ -159,8 +184,13 @@ void CustomButton::OnPaint(wxPaintEvent& event) {
     }
 
     // Draw text and icon
-    wxRect contentRect(x + 16, 0, w - 32, size.y); // Added padding so it doesn't overlap accent bar
+    wxRect contentRect(x + 16, 0, w - 32, size.y); // Default padding for left-aligned
     int alignFlags = m_alignment | wxALIGN_CENTER_VERTICAL;
+    
+    // If text is centered, give it full width to prevent clipping
+    if (m_alignment & wxALIGN_CENTER_HORIZONTAL) {
+        contentRect = wxRect(x, 0, w, size.y);
+    }
     
     // In compact mode, the label is empty. We want the icon perfectly centered!
     if (m_label.IsEmpty()) {

@@ -9,6 +9,8 @@
 #include "cluster_manager.h"
 #include "crypto_utils.h"
 #include "knowledge_layer.h"
+#include "confirmation_manager.h"
+#include <algorithm>
 
 #ifdef _WIN32
 #define POPEN _popen
@@ -20,6 +22,50 @@
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
+
+bool RequestNodeConfirmation(const std::string& node_id, const std::string& token_name, const std::string& action_msg, DangerLevel level = DangerLevel::HIGH) {
+    if (node_id == "local" || node_id.empty()) {
+        return ConfirmationManager::GetInstance().RequestConfirmation(token_name, action_msg, level);
+    }
+    
+    ClusterNode targetNode;
+    if (!ClusterManager::GetInstance().GetNode(node_id, targetNode) || targetNode.status != "connected") {
+        mcp_log("[Error] Overseer node not found or disconnected: " + node_id);
+        return false; 
+    }
+    
+    std::string ip = targetNode.ip_address;
+    int port = 8080;
+    size_t colon_pos = ip.find_last_of(':');
+    if (colon_pos != std::string::npos) {
+        port = std::stoi(ip.substr(colon_pos + 1));
+        ip = ip.substr(0, colon_pos);
+    }
+    
+    httplib::Client cli(ip, port);
+    cli.set_connection_timeout(5, 0);
+    cli.set_read_timeout(300, 0); // Wait up to 5 minutes for human
+    
+    json req = {
+        {"token_name", token_name},
+        {"action", action_msg},
+        {"level", (int)level}
+    };
+    
+    std::string plain_body = req.dump();
+    std::string encrypted_body = encrypt_aes256(targetNode.encryption_key, plain_body);
+    json enc_req = {
+        {"encrypted_payload", encrypted_body}
+    };
+    
+    if (auto res = cli.Post("/cluster/request_approval", enc_req.dump(), "application/json")) {
+        if (res->status == 200) return true;
+        return false;
+    }
+    
+    mcp_log("[Error] Failed to connect to overseer node: " + node_id);
+    return false;
+}
 
 json get_all_tools() {
     json tools = json::array({
@@ -101,16 +147,7 @@ json get_all_tools() {
                 {"required", json::array()}
             }}
         },
-        {
-            {"name", "get_knowledge"},
-            {"description", "Retrieves the digital twin knowledge base. Pass a section name to get specific data, or omit to get the full knowledge graph."},
-            {"inputSchema", {
-                {"type", "object"},
-                {"properties", {
-                    {"section", {{"type", "string"}, {"description", "Optional section name (server, services, applications, policies, workflow, etc.)"}}}
-                }}
-            }}
-        },
+
         {
             {"name", "update_knowledge"},
             {"description", "Updates or adds information to a specific section of the knowledge base. IMPORTANT: You MUST NOT use this tool automatically. You may only use this tool if the user explicitly asks you to update the knowledge base, or if you first ask the user for permission and they answer affirmatively."},
@@ -443,12 +480,52 @@ json tool_search_files(const json& id, const json& arguments, const std::filesys
         return make_error(id, -32000, "Internal error searching files");
     }
 }
-json tool_execute_command(const json& id, const json& arguments, const std::filesystem::path& base_dir) {
+json tool_execute_command(const json& id, const json& arguments, const std::filesystem::path& base_dir, const TokenInfo& token) {
     if (!arguments.contains("command") || !arguments["command"].is_string()) {
         return make_error(id, -32602, "Invalid or missing 'command' argument");
     }
     
     std::string command = arguments["command"].get<std::string>();
+
+    // Determine Danger Level
+    DangerLevel level = DangerLevel::LOW;
+    std::string lower_cmd = command;
+    std::transform(lower_cmd.begin(), lower_cmd.end(), lower_cmd.begin(), ::tolower);
+
+    if (lower_cmd.find("drop database") != std::string::npos ||
+        lower_cmd.find("rm -rf /") != std::string::npos ||
+        lower_cmd.find("del /s /q") != std::string::npos ||
+        lower_cmd.find("mkfs") != std::string::npos) {
+        level = DangerLevel::MAX;
+    } else if (lower_cmd.find("sudo") != std::string::npos ||
+               lower_cmd.find("reboot") != std::string::npos ||
+               lower_cmd.find("shutdown") != std::string::npos ||
+               lower_cmd.find("chmod -r 777") != std::string::npos) {
+        level = DangerLevel::HIGH;
+    }
+
+    bool requires_confirm = token.permissions.needs_confirmation("local", "execute_command");
+    if (level != DangerLevel::LOW || requires_confirm) {
+        if (requires_confirm && level == DangerLevel::LOW) {
+            level = DangerLevel::HIGH; // Elevate to HIGH if token requires confirm for this tool
+        }
+        
+        std::string action_msg = "Execute command: " + command;
+        if (!token.overseer_node_id.empty() && token.overseer_node_id != "local") {
+            action_msg += "\n\n(Overseer required: " + token.overseer_node_id + ")";
+        }
+        bool approved = RequestNodeConfirmation(
+            token.overseer_node_id,
+            token.name, 
+            "Execute command: " + command, 
+            level
+        );
+
+        if (!approved) {
+            return make_error(id, -32000, "User denied execution of the command.");
+        }
+    }
+
     std::string cmd = "cd \"" + base_dir.string() + "\" && " + command + " 2>&1";
     std::string output;
     
@@ -480,28 +557,7 @@ json tool_execute_command(const json& id, const json& arguments, const std::file
     }
 }
 
-json tool_get_knowledge(const json& id, const json& arguments) {
-    json data;
-    if (arguments.contains("section") && arguments["section"].is_string()) {
-        std::string section = arguments["section"].get<std::string>();
-        data = KnowledgeLayer::GetInstance().GetSection(section);
-        if (data.is_null()) {
-            return make_error(id, -32000, "Section '" + section + "' not found in knowledge base.");
-        }
-    } else {
-        data = KnowledgeLayer::GetInstance().GetFullKnowledge();
-    }
-    
-    return {
-        {"jsonrpc", "2.0"},
-        {"id", id},
-        {"result", {
-            {"content", json::array({
-                {{"type", "text"}, {"text", data.dump(2)}}
-            })}
-        }}
-    };
-}
+
 
 json tool_update_knowledge(const json& id, const json& arguments) {
     if (!arguments.contains("section") || !arguments["section"].is_string() || !arguments.contains("data")) {
@@ -560,14 +616,35 @@ json handle_tools_call(const json& request, const TokenInfo& token) {
         if (!has_access) {
             mcp_log("[Access Denied] Token '" + token.name + "' tried to use '" + name + "' on '" + target_server + "' — permission denied.");
             combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "] Error: Access Denied to tool '" + name + "' for this token."}});
+            has_error = true;
             continue;
         }
         
         json res_json;
         if (target_server != "local") {
+            // Forward logic omitted for brevity, assuming target node will handle its own tool confirmation if needed.
+            // But wait, if this token requires confirmation, we should probably confirm before forwarding.
+            if (token.permissions.needs_confirmation(target_server, name)) {
+                std::string action_msg = "Use tool '" + name + "' on remote node " + target_server;
+                if (!token.overseer_node_id.empty() && token.overseer_node_id != "local") action_msg += "\n\n(Overseer required: " + token.overseer_node_id + ")";
+                
+                bool approved = RequestNodeConfirmation(
+                    token.overseer_node_id,
+                    token.name,
+                    action_msg,
+                    DangerLevel::HIGH
+                );
+                if (!approved) {
+                    combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "] Error: User denied execution."}});
+                    has_error = true;
+                    continue;
+                }
+            }
+
             ClusterNode targetNode;
             if (!ClusterManager::GetInstance().GetNode(target_server, targetNode) || targetNode.status != "connected") {
                 combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "] Error: Target node not found or not connected"}});
+                has_error = true;
                 continue;
             }
             
@@ -628,13 +705,32 @@ json handle_tools_call(const json& request, const TokenInfo& token) {
                     }
                 } catch (const std::exception& e) {
                     combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "] Error parsing response: " + std::string(e.what())}});
+                    has_error = true;
                     continue;
                 }
             } else {
                 combined_content.push_back({{"type", "text"}, {"text", "[Server " + target_server + "] Error: HTTP " + (res ? std::to_string(res->status) : "Connection Error")}});
+                has_error = true;
                 continue;
             }
         } else {
+            if (token.permissions.needs_confirmation("local", name) && name != "execute_command") {
+                std::string action_msg = "Use tool '" + name + "'";
+                if (!token.overseer_node_id.empty() && token.overseer_node_id != "local") action_msg += "\n\n(Overseer required: " + token.overseer_node_id + ")";
+                
+                bool approved = RequestNodeConfirmation(
+                    token.overseer_node_id,
+                    token.name,
+                    action_msg,
+                    DangerLevel::HIGH
+                );
+                if (!approved) {
+                    res_json = make_error(id, -32000, "User denied execution of tool: " + name);
+                    // Force skip standard execution block
+                    name = "_denied_"; 
+                }
+            }
+
             fs::path base_dir = BASE_DIR;
             auto it = token.permissions.server_workspaces.find("local");
             if (it != token.permissions.server_workspaces.end() && !it->second.empty()) {
@@ -652,11 +748,9 @@ json handle_tools_call(const json& request, const TokenInfo& token) {
             } else if (name == "search_files") {
                 res_json = tool_search_files(id, arguments, base_dir);
             } else if (name == "execute_command") {
-                res_json = tool_execute_command(id, arguments, base_dir);
+                res_json = tool_execute_command(id, arguments, base_dir, token);
             } else if (name == "take_screenshot") {
                 res_json = tool_take_screenshot(id, arguments, base_dir);
-            } else if (name == "get_knowledge") {
-                res_json = tool_get_knowledge(id, arguments);
             } else if (name == "update_knowledge") {
                 res_json = tool_update_knowledge(id, arguments);
             } else {
