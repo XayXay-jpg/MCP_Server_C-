@@ -27,8 +27,9 @@
 #include <sstream>
 #include "sys_stats.h"
 #include "../mcp/confirmation_manager.h"
+#include <openssl/sha.h>
 
-std::string HashPassword(const std::string& input) {
+std::string LegacyHashPassword(const std::string& input) {
     uint64_t hash = 14695981039346656037ull;
     for (char c : input) {
         hash ^= static_cast<uint64_t>(c);
@@ -36,6 +37,19 @@ std::string HashPassword(const std::string& input) {
     }
     std::ostringstream oss;
     oss << std::hex << std::setw(16) << std::setfill('0') << hash;
+    return oss.str();
+}
+
+std::string HashPassword(const std::string& input) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256_CTX sha256;
+    SHA256_Init(&sha256);
+    SHA256_Update(&sha256, input.c_str(), input.length());
+    SHA256_Final(hash, &sha256);
+    std::ostringstream oss;
+    for(int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+        oss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+    }
     return oss.str();
 }
 
@@ -212,6 +226,8 @@ Windows::Windows(const wxString& title) : wxFrame(NULL, wxID_ANY, title, wxDefau
         });
     };
     
+    StartVramMonitor();
+
     g_confirm_callback = [this](const std::string& title, const std::string& msg) -> bool {
         std::promise<bool> promise;
         auto future = promise.get_future();
@@ -285,7 +301,25 @@ Windows::Windows(const wxString& title) : wxFrame(NULL, wxID_ANY, title, wxDefau
     if (SettingsManager::Get().appLock && !SettingsManager::Get().appPasswordHash.empty()) {
         wxPasswordEntryDialog dialog(nullptr, "Please enter your Master Password to unlock MCP Server Manager", "App Lock");
         if (dialog.ShowModal() == wxID_OK) {
-            if (HashPassword(dialog.GetValue().ToStdString()) != SettingsManager::Get().appPasswordHash) {
+            std::string inputPass = dialog.GetValue().ToStdString();
+            std::string savedHash = SettingsManager::Get().appPasswordHash;
+            bool authed = false;
+            
+            // Legacy Migration Check
+            if (savedHash.length() == 16) {
+                if (LegacyHashPassword(inputPass) == savedHash) {
+                    authed = true;
+                    // Migrate to new SHA256 hash
+                    SettingsManager::Get().appPasswordHash = HashPassword(inputPass);
+                    SettingsManager::Get().Save();
+                }
+            } else {
+                if (HashPassword(inputPass) == savedHash) {
+                    authed = true;
+                }
+            }
+            
+            if (!authed) {
                 wxMessageBox("Incorrect password.", "Error", wxICON_ERROR);
                 exit(1);
             }
@@ -293,6 +327,7 @@ Windows::Windows(const wxString& title) : wxFrame(NULL, wxID_ANY, title, wxDefau
             exit(0);
         }
     }
+
     
     if (SettingsManager::Get().autoStartServer) {
         wxCommandEvent dummy;
@@ -323,6 +358,8 @@ Windows::~Windows() {
             serverThread.join();
         }
     }
+    
+    StopVramMonitor();
     g_log_callback = nullptr;
 }
 

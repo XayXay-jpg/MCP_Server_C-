@@ -235,15 +235,17 @@ json tool_take_screenshot(const json& id, const json& arguments, const std::file
     std::replace(path_str.begin(), path_str.end(), '\\', '/');
 
 #ifdef _WIN32
-    std::string python_cmd = "python";
+    std::string cmd = "python -c \"from PIL import ImageGrab; img=ImageGrab.grab(); img.save('" + path_str + "')\"";
+#elif defined(__APPLE__)
+    std::string cmd = "screencapture -x " + path_str;
 #else
-    std::string python_cmd = "python3";
+    // Linux
+    std::string cmd = "gnome-screenshot -f " + path_str + " || import -window root " + path_str + " || scrot " + path_str;
 #endif
 
-    std::string cmd = python_cmd + " -c \"from PIL import ImageGrab; img=ImageGrab.grab(); img.save('" + path_str + "')\"";
     int ret = std::system(cmd.c_str());
     if (ret != 0) {
-        return make_error(id, -32000, "Failed to take screenshot using python PIL");
+        return make_error(id, -32000, "Failed to take screenshot using system tools (check dependencies)");
     }
 
     std::ifstream file(file_path.string(), std::ios::binary);

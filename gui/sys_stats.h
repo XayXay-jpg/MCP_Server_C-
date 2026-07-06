@@ -19,3 +19,7 @@ struct SystemStats {
 
 // Функция для получения полной статистики системы
 SystemStats GetSystemStats();
+
+// Функции для асинхронного мониторинга VRAM
+void StartVramMonitor();
+void StopVramMonitor();

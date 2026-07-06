@@ -276,9 +276,17 @@ std::string NetworkUtils::GetPublicIP() {
     // Query our public IP by binding directly to the physical network interface,
     // bypassing any active VPN tunnel (e.g. singbox/tun).
     // Only the IP address is sent to api.ipify.org — no tokens or private data.
-    std::string ip = exec(
-        "curl -s --max-time 3 --interface enp42s0 https://api.ipify.org 2>/dev/null"
-    );
+    std::string ip = "";
+#ifdef __linux__
+    // Try bypassing VPN on linux first
+    ip = exec("curl -s --max-time 3 --interface enp42s0 https://api.ipify.org 2>/dev/null");
+#endif
+
+    // Fallback if interface is missing, or for Mac/Windows
+    if (ip.empty() || ip.size() > 45 || ip.find('.') == std::string::npos) {
+        ip = exec("curl -s --max-time 3 https://api.ipify.org 2>/dev/null");
+    }
+    
     // Validate: must be non-empty, no HTML tags, no spaces, contain a dot (IPv4)
     if (!ip.empty() && ip.size() <= 45 &&
         ip.find('<') == std::string::npos &&

@@ -382,7 +382,9 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                         }
                     }
                 }
-            } catch (...) {}
+            } catch (const std::exception& e) {
+                mcp_log(std::string("[Error] Payload decrypt/peek failed: ") + e.what());
+            }
         }
         
         if (!token_provided.empty() && !has_token) {
@@ -412,7 +414,9 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
                     std::string tool_name = peek["params"].value("name", "unknown");
                     mcp_log("[Child] Incoming tool request from Parent (" + req.remote_addr + "): " + tool_name);
                 }
-            } catch (...) {}
+            } catch (const std::exception& e) {
+                mcp_log(std::string("[Error] Child tool peek failed: ") + e.what());
+            }
         }
         
         try {

@@ -5,6 +5,85 @@
 #include <cstdio>
 #include <memory>
 #include <array>
+#include <thread>
+#include <atomic>
+#include <chrono>
+
+static std::atomic<double> g_vramUsedGB{0.0};
+static std::atomic<double> g_vramTotalGB{0.0};
+static std::atomic<bool> g_hasVRAM{false};
+static std::atomic<bool> g_vramMonitorRunning{false};
+static std::thread g_vramThread;
+
+#if defined(_WIN32)
+#include <windows.h>
+static FILE* popen_win_vram(const char* command, const char* mode) {
+    return _popen(command, mode);
+}
+static int pclose_win_vram(FILE* file) {
+    return _pclose(file);
+}
+#endif
+
+void StartVramMonitor() {
+    if (g_vramMonitorRunning.exchange(true)) return;
+    
+    g_vramThread = std::thread([]() {
+        while (g_vramMonitorRunning) {
+            unsigned long long totalUsedMB = 0;
+            unsigned long long totalMaxMB = 0;
+            bool foundGpu = false;
+            std::array<char, 128> sysbuf;
+            
+#if defined(__linux__)
+            std::unique_ptr<FILE, decltype(&pclose)> pipe(popen("nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null", "r"), pclose);
+            if (pipe) {
+                while (fgets(sysbuf.data(), sysbuf.size(), pipe.get()) != nullptr) {
+                    unsigned long long u = 0, t = 0;
+                    if (sscanf(sysbuf.data(), "%llu, %llu", &u, &t) == 2) {
+                        totalUsedMB += u;
+                        totalMaxMB += t;
+                        foundGpu = true;
+                    }
+                }
+            }
+#elif defined(_WIN32)
+            std::unique_ptr<FILE, decltype(&pclose_win_vram)> pipe(popen_win_vram("nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits 2>nul", "r"), pclose_win_vram);
+            if (pipe) {
+                while (fgets(sysbuf.data(), sysbuf.size(), pipe.get()) != nullptr) {
+                    unsigned long long u = 0, t = 0;
+                    if (sscanf(sysbuf.data(), "%llu, %llu", &u, &t) == 2) {
+                        totalUsedMB += u;
+                        totalMaxMB += t;
+                        foundGpu = true;
+                    }
+                }
+            }
+#endif
+            
+            if (foundGpu && totalMaxMB > 0) {
+                g_vramUsedGB = totalUsedMB / 1024.0;
+                g_vramTotalGB = totalMaxMB / 1024.0;
+                g_hasVRAM = true;
+            } else {
+                g_hasVRAM = false;
+            }
+            
+            // Sleep for 10 seconds, but check exit condition frequently
+            for (int i = 0; i < 100 && g_vramMonitorRunning; ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        }
+    });
+}
+
+void StopVramMonitor() {
+    if (g_vramMonitorRunning.exchange(false)) {
+        if (g_vramThread.joinable()) {
+            g_vramThread.join();
+        }
+    }
+}
 
 #if defined(__linux__)
 #include <sys/statvfs.h>
@@ -96,29 +175,16 @@ SystemStats GetSystemStats() {
         }
     }
 
-    // 4. VRAM Usage (via nvidia-smi)
-    std::array<char, 128> sysbuf;
-    std::string result;
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen("nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null", "r"), pclose);
-    if (pipe) {
-        unsigned long long totalUsedMB = 0;
-        unsigned long long totalMaxMB = 0;
-        bool foundGpu = false;
-        while (fgets(sysbuf.data(), sysbuf.size(), pipe.get()) != nullptr) {
-            unsigned long long u = 0, t = 0;
-            if (sscanf(sysbuf.data(), "%llu, %llu", &u, &t) == 2) {
-                totalUsedMB += u;
-                totalMaxMB += t;
-                foundGpu = true;
-            }
+    // 4. VRAM Usage (from async monitor)
+    if (g_hasVRAM) {
+        stats.vramUsedGB = g_vramUsedGB.load();
+        stats.vramTotalGB = g_vramTotalGB.load();
+        if (stats.vramTotalGB > 0) {
+            stats.vramPercent = (stats.vramUsedGB / stats.vramTotalGB) * 100.0;
         }
-        if (foundGpu && totalMaxMB > 0) {
-            stats.vramUsedGB = totalUsedMB / 1024.0;
-            stats.vramTotalGB = totalMaxMB / 1024.0;
-            stats.vramPercent = (double)totalUsedMB / totalMaxMB * 100.0;
-            stats.hasVRAM = true;
-        }
+        stats.hasVRAM = true;
     }
+
 
     return stats;
 }
@@ -290,29 +356,16 @@ SystemStats GetSystemStats() {
         }
     }
 
-    // 4. VRAM Usage (via nvidia-smi)
-    std::array<char, 128> sysbuf;
-    std::string result;
-    std::unique_ptr<FILE, decltype(&pclose_win)> pipe(popen_win("nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits 2>nul", "r"), pclose_win);
-    if (pipe) {
-        unsigned long long totalUsedMB = 0;
-        unsigned long long totalMaxMB = 0;
-        bool foundGpu = false;
-        while (fgets(sysbuf.data(), sysbuf.size(), pipe.get()) != nullptr) {
-            unsigned long long u = 0, t = 0;
-            if (sscanf(sysbuf.data(), "%llu, %llu", &u, &t) == 2) {
-                totalUsedMB += u;
-                totalMaxMB += t;
-                foundGpu = true;
-            }
+    // 4. VRAM Usage (from async monitor)
+    if (g_hasVRAM) {
+        stats.vramUsedGB = g_vramUsedGB.load();
+        stats.vramTotalGB = g_vramTotalGB.load();
+        if (stats.vramTotalGB > 0) {
+            stats.vramPercent = (stats.vramUsedGB / stats.vramTotalGB) * 100.0;
         }
-        if (foundGpu && totalMaxMB > 0) {
-            stats.vramUsedGB = totalUsedMB / 1024.0;
-            stats.vramTotalGB = totalMaxMB / 1024.0;
-            stats.vramPercent = (double)totalUsedMB / totalMaxMB * 100.0;
-            stats.hasVRAM = true;
-        }
+        stats.hasVRAM = true;
     }
+
 
     return stats;
 }
