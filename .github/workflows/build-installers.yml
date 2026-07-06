@@ -6,6 +6,9 @@ on:
       - 'v*.*.*'
   workflow_dispatch: # Allows manual trigger
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
