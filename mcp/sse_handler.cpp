@@ -1,6 +1,8 @@
 #include "sse_handler.h"
 #include "utils.h"
 #include "knowledge_layer.h"
+#include "tools.h"
+#include "network_utils.h"
 
 using json = nlohmann::json;
 
@@ -38,29 +40,53 @@ void notify_tools_changed() {
 }
 
 void notify_knowledge_changed(const std::string& session_id) {
-    json notification = {
-        {"jsonrpc", "2.0"},
-        {"method", "notifications/knowledge/updated"},
-        {"params", {
-            {"data", KnowledgeLayer::GetInstance().GetFullKnowledge()}
-        }}
-    };
-    
     std::lock_guard<std::mutex> lock(sessions_mutex);
+    
+    auto send_to_single_session = [&](std::shared_ptr<Session> session) {
+        if (!session->active) return;
+        
+        json knowledge = KnowledgeLayer::GetInstance().GetFullKnowledge();
+        TokenInfo token_info;
+        for (const auto& t : NetworkUtils::LoadTokens()) {
+            if (t.id == session->token_id) {
+                token_info = t;
+                break;
+            }
+        }
+        
+        if (!token_info.id.empty()) {
+            json available_tools = get_available_tools(token_info);
+            json simplified_tools = json::array();
+            for(const auto& t : available_tools) {
+                simplified_tools.push_back({
+                    {"name", t.value("name", "")},
+                    {"description", t.value("description", "")}
+                });
+            }
+            knowledge["server_provided"]["available_tools"] = simplified_tools;
+        }
+        
+        json notification = {
+            {"jsonrpc", "2.0"},
+            {"method", "notifications/knowledge/updated"},
+            {"params", {
+                {"data", knowledge}
+            }}
+        };
+        
+        std::lock_guard<std::mutex> slock(session->mtx);
+        session->messages.push(notification.dump());
+        session->cv.notify_one();
+    };
+
     if (!session_id.empty()) {
         auto it = active_sessions.find(session_id);
-        if (it != active_sessions.end() && it->second->active) {
-            std::lock_guard<std::mutex> slock(it->second->mtx);
-            it->second->messages.push(notification.dump());
-            it->second->cv.notify_one();
+        if (it != active_sessions.end()) {
+            send_to_single_session(it->second);
         }
     } else {
         for (const auto& [id, session] : active_sessions) {
-            if (session->active) {
-                std::lock_guard<std::mutex> slock(session->mtx);
-                session->messages.push(notification.dump());
-                session->cv.notify_one();
-            }
+            send_to_single_session(session);
         }
     }
 }

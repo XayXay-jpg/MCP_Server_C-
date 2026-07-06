@@ -142,7 +142,7 @@ void PermissionsDialog::SetupUI() {
     lblTools->SetForegroundColour(wxColour("#A1A1AA"));
     rightSizer->Add(lblTools, 0, wxBOTTOM, 5);
 
-    listTools = new wxListCtrl(this, ID_LIST_TOOLS, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxBORDER_NONE);
+    listTools = new wxListCtrl(this, ID_LIST_TOOLS, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_NO_HEADER | wxBORDER_NONE);
     listTools->EnableCheckBoxes(true);
     listTools->InsertColumn(0, "Tool Name", wxLIST_FORMAT_LEFT, 200);
     listTools->SetBackgroundColour(wxColour("#141417"));
@@ -296,6 +296,14 @@ void PermissionsDialog::OnToolToggled(wxListEvent& event) {
     if (server_item == -1) return;
     
     std::string server_id = listServers->GetItemText(server_item).ToStdString();
+    
+    // If the '*' item (index 0) was toggled, visually sync the other checkboxes
+    if (event.GetIndex() == 0) {
+        bool is_star_checked = listTools->IsItemChecked(0);
+        for (long i = 1; i < listTools->GetItemCount(); i++) {
+            listTools->CheckItem(i, is_star_checked);
+        }
+    }
     
     // Collect checked tools
     std::vector<std::string> new_allowed;

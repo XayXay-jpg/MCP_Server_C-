@@ -81,7 +81,7 @@ std::vector<TokenInfo> NetworkUtils::LoadTokens() {
             t.creation_date = item.value("creation_date", "");
             t.active = item.value("active", false);
             t.role = item.value("role", "Developer");
-            t.overseer_node_id = item.value("overseer_node_id", "");
+            t.overseer_node_id = item.value("overseer_node_id", "local");
             if (item.contains("permissions")) {
                 if (item["permissions"].contains("servers") && item["permissions"]["servers"].is_object()) {
                     for (auto& [server_id, tools_val] : item["permissions"]["servers"].items()) {

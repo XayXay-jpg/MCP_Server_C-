@@ -64,7 +64,7 @@ struct TokenInfo {
     std::string creation_date;
     bool active;
     std::string role = "Developer"; // Admin, Developer, Intern, Automation, Observer, Restricted AI
-    std::string overseer_node_id;
+    std::string overseer_node_id = "local";
     TokenPermissions permissions;
 };
 

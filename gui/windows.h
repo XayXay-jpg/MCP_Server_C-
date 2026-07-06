@@ -11,10 +11,12 @@
 #include <wx/choice.h>
 #include <wx/listctrl.h>
 #include <wx/clipbrd.h>
+#include <wx/spinctrl.h>
 
 wxDECLARE_EVENT(wxEVT_SERVER_LOG, wxThreadEvent);
 wxDECLARE_EVENT(wxEVT_SERVER_NOTIFY, wxThreadEvent);
 wxDECLARE_EVENT(wxEVT_MCP_CONFIRM_REQUEST, wxThreadEvent);
+wxDECLARE_EVENT(wxEVT_SERVER_BIND_ERROR, wxThreadEvent);
 
 class AnimatedLogo : public wxPanel {
 public:
@@ -205,6 +207,7 @@ private:
     wxChoice* choiceLogRetention = nullptr;
     CustomButton* btnClearCache = nullptr;
     wxChoice* choiceTheme = nullptr;
+    wxSpinCtrl* spinServerPort = nullptr;
     wxCheckBox* chkCompactMode = nullptr;
     wxCheckBox* chkAppLock = nullptr;
     wxCheckBox* chkMaskSecrets = nullptr;
@@ -253,6 +256,7 @@ private:
     void OnServerLog(wxThreadEvent& event);
     void OnServerNotify(wxThreadEvent& event);
     void OnMcpConfirmRequest(wxThreadEvent& event);
+    void OnServerBindError(wxThreadEvent& event);
     void OnTimer(wxTimerEvent& event);
     
     void OnBrowseWorkspace(wxCommandEvent& event);

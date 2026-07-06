@@ -165,7 +165,7 @@ void register_cluster_endpoints(httplib::Server& svr) {
                 resp["hostname"] = hostnameStr;
                 resp["platform"] = platformStr;
                 resp["local_ip"] = localIp;
-                resp["app_version"] = "0.1.8";
+                resp["app_version"] = "0.5-alpha";
 
                 res.status = 200;
                 res.set_content(resp.dump(), "application/json");

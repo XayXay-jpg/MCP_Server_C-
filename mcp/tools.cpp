@@ -133,9 +133,10 @@ json get_all_tools() {
             {"inputSchema", {
                 {"type", "object"},
                 {"properties", {
-                    {"command", {{"type", "string"}, {"description", "Command to execute"}}}
+                    {"command", {{"type", "string"}, {"description", "Command to execute"}}},
+                    {"description", {{"type", "string"}, {"description", "A clear, user-facing explanation of what this command will do and why it is being run. This will be shown to the user for confirmation."}}}
                 }},
-                {"required", {"command"}}
+                {"required", {"command", "description"}}
             }}
         },
         {
@@ -488,9 +489,10 @@ json tool_execute_command(const json& id, const json& arguments, const std::file
     }
     
     std::string command = arguments["command"].get<std::string>();
+    std::string reason = arguments.value("description", "No intent provided by AI.");
 
     // Determine Danger Level
-    DangerLevel level = DangerLevel::LOW;
+    DangerLevel level = DangerLevel::HIGH; // Default to HIGH to force confirmation
     std::string lower_cmd = command;
     std::transform(lower_cmd.begin(), lower_cmd.end(), lower_cmd.begin(), ::tolower);
 
@@ -512,14 +514,14 @@ json tool_execute_command(const json& id, const json& arguments, const std::file
             level = DangerLevel::HIGH; // Elevate to HIGH if token requires confirm for this tool
         }
         
-        std::string action_msg = "Execute command: " + command;
+        std::string action_msg = "Intent: " + reason + "\n\nCommand:\n" + command;
         if (!token.overseer_node_id.empty() && token.overseer_node_id != "local") {
             action_msg += "\n\n(Overseer required: " + token.overseer_node_id + ")";
         }
         bool approved = RequestNodeConfirmation(
             token.overseer_node_id,
             token.name, 
-            "Execute command: " + command, 
+            action_msg, 
             level
         );
 
@@ -627,8 +629,20 @@ json handle_tools_call(const json& request, const TokenInfo& token) {
             // Forward logic omitted for brevity, assuming target node will handle its own tool confirmation if needed.
             // But wait, if this token requires confirmation, we should probably confirm before forwarding.
             if (token.permissions.needs_confirmation(target_server, name)) {
-                std::string action_msg = "Use tool '" + name + "' on remote node " + target_server;
-                if (!token.overseer_node_id.empty() && token.overseer_node_id != "local") action_msg += "\n\n(Overseer required: " + token.overseer_node_id + ")";
+                std::string action_msg = "";
+                if (name == "execute_command" && arguments.contains("command")) {
+                    std::string reason = arguments.value("description", "No intent provided by AI.");
+                    std::string cmd = arguments.value("command", "");
+                    action_msg = "Intent: " + reason + "\n\nCommand:\n" + cmd + "\n\n(Remote node: " + target_server + ")";
+                } else {
+                    action_msg = "Intent: Use tool '" + name + "' on remote node " + target_server;
+                    if (!arguments.empty()) {
+                        action_msg += "\n\nArguments:\n" + arguments.dump(2);
+                    }
+                }
+                if (!token.overseer_node_id.empty() && token.overseer_node_id != "local") {
+                    action_msg += "\n\n(Overseer required: " + token.overseer_node_id + ")";
+                }
                 
                 bool approved = RequestNodeConfirmation(
                     token.overseer_node_id,
@@ -717,8 +731,13 @@ json handle_tools_call(const json& request, const TokenInfo& token) {
             }
         } else {
             if (token.permissions.needs_confirmation("local", name) && name != "execute_command") {
-                std::string action_msg = "Use tool '" + name + "'";
-                if (!token.overseer_node_id.empty() && token.overseer_node_id != "local") action_msg += "\n\n(Overseer required: " + token.overseer_node_id + ")";
+                std::string action_msg = "Intent: Use tool '" + name + "'";
+                if (!arguments.empty()) {
+                    action_msg += "\n\nArguments:\n" + arguments.dump(2);
+                }
+                if (!token.overseer_node_id.empty() && token.overseer_node_id != "local") {
+                    action_msg += "\n\n(Overseer required: " + token.overseer_node_id + ")";
+                }
                 
                 bool approved = RequestNodeConfirmation(
                     token.overseer_node_id,

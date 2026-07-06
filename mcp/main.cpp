@@ -66,6 +66,7 @@ json handle_tools_list(const json& request, const TokenInfo& token) {
 
 
 std::unique_ptr<httplib::Server> g_svr;
+std::function<void()> g_bind_error_callback = nullptr;
 
 void stop_mcp_server() {
     ClusterManager::GetInstance().StopHealthCheckTask();
@@ -521,7 +522,14 @@ int run_mcp_server(int port, const std::string& default_workspace, const std::st
         ClusterManager::GetInstance().StartHealthCheckTask();
     });
 
-    svr.listen(host.c_str(), port);
+    if (!svr.bind_to_port(host.c_str(), port)) {
+        mcp_log("[Error] Failed to bind to port " + std::to_string(port) + ". Port might be in use.");
+        if (g_bind_error_callback) {
+            g_bind_error_callback();
+        }
+        return 1;
+    }
+    svr.listen_after_bind();
 
     return 0;
 }

@@ -73,11 +73,12 @@ wxBitmap GetBitmapFromBase64(const std::string& b64) {
 #include <wx/msw/registry.h>
 #endif
 
-const std::string APP_VERSION = "1.0.0-beta";
+const std::string APP_VERSION = "0.5-alpha";
 
 wxDEFINE_EVENT(wxEVT_SERVER_LOG, wxThreadEvent);
 wxDEFINE_EVENT(wxEVT_SERVER_NOTIFY, wxThreadEvent);
 wxDEFINE_EVENT(wxEVT_MCP_CONFIRM_REQUEST, wxThreadEvent);
+wxDEFINE_EVENT(wxEVT_SERVER_BIND_ERROR, wxThreadEvent);
 
 wxBEGIN_EVENT_TABLE(AnimatedLogo, wxPanel)
     EVT_PAINT(AnimatedLogo::OnPaint)
@@ -202,6 +203,96 @@ enum {
     ID_BTN_KNOWLEDGE_SAVE
 };
 
+class McpConfirmDialog : public wxDialog {
+public:
+    McpConfirmDialog(wxWindow* parent, const wxString& title, const wxString& message, bool is_max_danger = false) 
+        : wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxSize(600, 450), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxSTAY_ON_TOP),
+          m_is_max_danger(is_max_danger) 
+    {
+        SetBackgroundColour(wxColour("#1E1E24")); // Match main UI background
+        
+        wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+        
+        // Add a warning icon visually using text (could use bitmap but text is easier cross-platform)
+        wxBoxSizer* headerSizer = new wxBoxSizer(wxHORIZONTAL);
+        wxStaticText* lblIcon = new wxStaticText(this, wxID_ANY, m_is_max_danger ? "[!]" : "[?]");
+        lblIcon->SetFont(wxFontInfo(16).Bold());
+        lblIcon->SetForegroundColour(m_is_max_danger ? wxColour("#D62828") : wxColour("#E9C46A"));
+        headerSizer->Add(lblIcon, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+        
+        wxStaticText* lblTitle = new wxStaticText(this, wxID_ANY, title);
+        lblTitle->SetFont(wxFontInfo(14).Bold());
+        lblTitle->SetForegroundColour(wxColour("#F4F4F5"));
+        headerSizer->Add(lblTitle, 0, wxALIGN_CENTER_VERTICAL);
+        
+        mainSizer->Add(headerSizer, 0, wxALL | wxEXPAND, 20);
+        
+        wxStaticLine* line = new wxStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLI_HORIZONTAL);
+        mainSizer->Add(line, 0, wxEXPAND | wxLEFT | wxRIGHT, 20);
+        
+        wxTextCtrl* txtMessage = new wxTextCtrl(this, wxID_ANY, message, wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
+        txtMessage->SetBackgroundColour(wxColour("#141417"));
+        txtMessage->SetForegroundColour(wxColour("#A1A1AA"));
+        txtMessage->SetFont(wxFontInfo(10).Family(wxFONTFAMILY_TELETYPE));
+        mainSizer->Add(txtMessage, 1, wxALL | wxEXPAND, 20);
+        
+        if (m_is_max_danger) {
+            m_txtConfirm = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxBORDER_SIMPLE);
+            m_txtConfirm->SetBackgroundColour(wxColour("#141417"));
+            m_txtConfirm->SetForegroundColour(wxColour("#F4F4F5"));
+            m_txtConfirm->SetFont(wxFontInfo(12));
+            mainSizer->Add(m_txtConfirm, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 20);
+        }
+        
+        wxBoxSizer* btnSizer = new wxBoxSizer(wxHORIZONTAL);
+        btnSizer->AddStretchSpacer();
+        
+        CustomButton* btnDeny = new CustomButton(this, wxID_CANCEL, m_is_max_danger ? "Cancel" : "Deny", wxDefaultPosition, wxSize(120, 40));
+        btnDeny->SetBackgroundColour(wxColour("#3B82F6")); // Bright blue for safe action
+        btnDeny->SetForegroundColour(wxColour("#F8FAFC"));
+        btnDeny->SetAlignment(wxALIGN_CENTER);
+        btnDeny->SetBorderRadius(6);
+        btnSizer->Add(btnDeny, 0, wxRIGHT | wxALIGN_CENTER_VERTICAL, 15);
+        
+        CustomButton* btnConfirm = new CustomButton(this, wxID_OK, m_is_max_danger ? "Confirm" : "Allow", wxDefaultPosition, wxSize(120, 40));
+        btnConfirm->SetBackgroundColour(wxColour(m_is_max_danger ? "#7F1D1D" : "#334155")); // Dark/subdued colors for risky action
+        btnConfirm->SetForegroundColour(wxColour("#A1A1AA")); // Dimmer text to make it less inviting
+        btnConfirm->SetAlignment(wxALIGN_CENTER);
+        btnConfirm->SetBorderRadius(6);
+        btnSizer->Add(btnConfirm, 0, wxALIGN_CENTER_VERTICAL, 0);
+        
+        mainSizer->Add(btnSizer, 0, wxALL | wxEXPAND, 20);
+        
+        SetSizer(mainSizer);
+        Layout();
+        CenterOnParent();
+        
+        btnConfirm->Bind(wxEVT_BUTTON, &McpConfirmDialog::OnConfirm, this);
+        btnDeny->Bind(wxEVT_BUTTON, &McpConfirmDialog::OnDeny, this);
+    }
+    
+    void OnConfirm(wxCommandEvent& event) {
+        if (m_is_max_danger) {
+            if (m_txtConfirm->GetValue().Lower() != "confirm") {
+                // Keep the system dialog here as a quick error response if they type wrong,
+                // or just let them try again. We will show error.
+                wxMessageBox("Confirmation text did not match 'confirm'. Action denied.", "Action Denied", wxOK | wxICON_ERROR, this);
+                EndModal(wxID_CANCEL);
+                return;
+            }
+        }
+        EndModal(wxID_OK);
+    }
+    
+    void OnDeny(wxCommandEvent& event) {
+        EndModal(wxID_CANCEL);
+    }
+
+private:
+    bool m_is_max_danger;
+    wxTextCtrl* m_txtConfirm = nullptr;
+};
+
 Windows::Windows(const wxString& title) : wxFrame(NULL, wxID_ANY, title, wxDefaultPosition, wxSize(1000, 750)), isServerRunning(false), uptimeSeconds(0) {
     // Determine default workspace at runtime — avoids hardcoding any username
     const char* homeDir = getenv("HOME");
@@ -233,22 +324,29 @@ Windows::Windows(const wxString& title) : wxFrame(NULL, wxID_ANY, title, wxDefau
         auto future = promise.get_future();
         
         CallAfter([&promise, title, msg, this]() {
-            int res = wxMessageBox(msg, title, wxYES_NO | wxICON_QUESTION, this);
-            promise.set_value(res == wxYES);
+            McpConfirmDialog dlg(this, title, msg, false);
+            int res = dlg.ShowModal();
+            promise.set_value(res == wxID_OK);
         });
         
         return future.get();
     };
     
     Bind(wxEVT_SERVER_NOTIFY, &Windows::OnServerNotify, this);
-    
     Bind(wxEVT_MCP_CONFIRM_REQUEST, &Windows::OnMcpConfirmRequest, this);
+    Bind(wxEVT_SERVER_BIND_ERROR, &Windows::OnServerBindError, this);
 
     ConfirmationManager::GetInstance().SetNotificationCallback([this](const std::string& req_id) {
         wxThreadEvent* event = new wxThreadEvent(wxEVT_MCP_CONFIRM_REQUEST);
         event->SetString(req_id);
         wxQueueEvent(this, event);
     });
+
+    extern std::function<void()> g_bind_error_callback;
+    g_bind_error_callback = [this]() {
+        wxThreadEvent* event = new wxThreadEvent(wxEVT_SERVER_BIND_ERROR);
+        wxQueueEvent(this, event);
+    };
 
     LanguageManager::Get().SetLanguage(SettingsManager::Get().language);
 
@@ -1098,6 +1196,15 @@ void Windows::SetupUI() {
     chkLaunchOnStartup->SetValue(sm.launchOnStartup);
     chkLaunchOnStartup->SetForegroundColour(fgColor);
     
+    wxBoxSizer* portSizer = new wxBoxSizer(wxHORIZONTAL);
+    wxStaticText* lblPort = new wxStaticText(pageGlobalSettings, wxID_ANY, "Server Port:");
+    lblPort->SetForegroundColour(fgColor);
+    spinServerPort = new wxSpinCtrl(pageGlobalSettings, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(100, -1), wxSP_ARROW_KEYS, 1, 65535, sm.serverPort);
+    spinServerPort->SetBackgroundColour(wxColour("#1F1F24"));
+    spinServerPort->SetForegroundColour(wxColour("#E4E4E7"));
+    portSizer->Add(lblPort, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+    portSizer->Add(spinServerPort, 0, wxALIGN_CENTER_VERTICAL);
+    
     chkAutoStartServer = new wxCheckBox(pageGlobalSettings, wxID_ANY, lang.GetString("GS_AUTO_START_SERVER"));
     chkAutoStartServer->SetValue(sm.autoStartServer);
     chkAutoStartServer->SetForegroundColour(fgColor);
@@ -1110,6 +1217,7 @@ void Windows::SetupUI() {
     chkShowNotifications->SetValue(sm.showNotifications);
     chkShowNotifications->SetForegroundColour(fgColor);
 
+    wsSizer->Add(portSizer, 0, wxBOTTOM, 10);
     wsSizer->Add(chkLaunchOnStartup, 0, wxBOTTOM, 10);
     wsSizer->Add(chkAutoStartServer, 0, wxBOTTOM, 10);
     wsSizer->Add(chkMinimizeToTray, 0, wxBOTTOM, 10);
@@ -1231,6 +1339,7 @@ void Windows::SetupUI() {
     chkAppLock->Bind(wxEVT_CHECKBOX, &Windows::OnSettingChanged, this);
     chkMaskSecrets->Bind(wxEVT_CHECKBOX, &Windows::OnSettingChanged, this);
     chkAutoUpdate->Bind(wxEVT_CHECKBOX, &Windows::OnSettingChanged, this);
+    spinServerPort->Bind(wxEVT_SPINCTRL, &Windows::OnSettingChanged, this);
     btnClearCache->Bind(wxEVT_BUTTON, &Windows::OnClearCache, this);
     btnCheckUpdates->Bind(wxEVT_BUTTON, &Windows::OnCheckUpdates, this);
     
@@ -1919,8 +2028,9 @@ void Windows::OnStartStop(wxCommandEvent& event) {
         }
 
         // Launch in background
-        serverThread = std::thread([this, activeToken]() {
-            run_mcp_server(3000, currentWorkspace, "mcp", activeToken);
+        int portToUse = SettingsManager::Get().serverPort;
+        serverThread = std::thread([this, activeToken, portToUse]() {
+            run_mcp_server(portToUse, currentWorkspace, "mcp", activeToken);
         });
     } else {
         // Stop Server
@@ -1955,6 +2065,24 @@ void Windows::OnServerNotify(wxThreadEvent& event) {
 
 void Windows::OnServerLog(wxThreadEvent& event) {
     txtLogs->AppendText(event.GetString() + "\n");
+}
+
+void Windows::OnServerBindError(wxThreadEvent& event) {
+    auto& lang = LanguageManager::Get();
+    
+    // Stop animations and reset UI
+    isServerRunning = false;
+    m_timer->Stop();
+    
+    lblStatusValue->SetLabel(lang.GetString("OFFLINE"));
+    lblStatusValue->SetForegroundColour(wxColour("#D62828"));
+    btnStartStop->SetLabel(lang.GetString("START_BTN"));
+    btnStartStop->SetBackgroundColour(wxColour("#158E8A"));
+    
+    // Show error dialog
+    int port = SettingsManager::Get().serverPort;
+    wxMessageBox(wxString::Format("Failed to start server. Port %d is already in use by another application.", port),
+                 "Port In Use", wxICON_ERROR | wxOK, this);
 }
 
 void Windows::OnComboServerStats(wxCommandEvent& event) {
@@ -2525,6 +2653,7 @@ void Windows::OnSettingChanged(wxCommandEvent& event) {
     sm.appLock = chkAppLock->GetValue();
     sm.maskSecrets = chkMaskSecrets->GetValue();
     sm.autoUpdate = chkAutoUpdate->GetValue();
+    if (spinServerPort) sm.serverPort = spinServerPort->GetValue();
     
     sm.Save();
     
@@ -2828,21 +2957,15 @@ void Windows::OnMcpConfirmRequest(wxThreadEvent& event) {
             "Token '%s' is requesting permission to execute a HIGH danger action:\n\n%s\n\nDo you want to allow this action?",
             req->token_name, req->action_description
         );
-        int res = wxMessageBox(msg, "Security Warning - Action Requested", wxYES_NO | wxNO_DEFAULT | wxICON_EXCLAMATION, this);
-        approved = (res == wxYES);
+        McpConfirmDialog dlg(this, "Security Warning - Action Requested", msg, false);
+        approved = (dlg.ShowModal() == wxID_OK);
     } else if (req->level == DangerLevel::MAX) {
         wxString msg = wxString::Format(
             "Token '%s' is requesting permission to execute a MAX danger action:\n\n%s\n\nThis action is extremely dangerous. To allow it, type 'confirm' below:",
             req->token_name, req->action_description
         );
-        wxTextEntryDialog dialog(this, msg, "CRITICAL Security Warning");
-        if (dialog.ShowModal() == wxID_OK) {
-            if (dialog.GetValue().Lower() == "confirm") {
-                approved = true;
-            } else {
-                wxMessageBox("Confirmation text did not match 'confirm'. Action denied.", "Action Denied", wxOK | wxICON_ERROR);
-            }
-        }
+        McpConfirmDialog dlg(this, "CRITICAL Security Warning", msg, true);
+        approved = (dlg.ShowModal() == wxID_OK);
     } else {
         approved = true; // LOW is auto-approved if it ever reaches here
     }

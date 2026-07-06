@@ -22,6 +22,7 @@ public:
     std::string parentMasterToken = "";
     std::string parentEncryptionKey = "";
     std::vector<std::string> disabled_tools;
+    int serverPort = 3000;
 
     // Storage & Logs
     std::string logRetention = "30 Days"; // "7 Days", "30 Days", "Keep All"

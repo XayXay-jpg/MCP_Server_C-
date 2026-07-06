@@ -36,6 +36,7 @@ void SettingsManager::Load() {
             parentMasterToken = j.value("parentMasterToken", "");
             parentEncryptionKey = j.value("parentEncryptionKey", "");
             disabled_tools = j.value("disabled_tools", std::vector<std::string>{});
+            serverPort = j.value("serverPort", 3000);
             logRetention = j.value("logRetention", "30 Days");
             theme = j.value("theme", "Dark");
             language = j.value("language", "EN");
@@ -61,6 +62,7 @@ void SettingsManager::Save() {
         j["parentMasterToken"] = parentMasterToken;
         j["parentEncryptionKey"] = parentEncryptionKey;
         j["disabled_tools"] = disabled_tools;
+        j["serverPort"] = serverPort;
         j["logRetention"] = logRetention;
         j["theme"] = theme;
         j["language"] = language;
