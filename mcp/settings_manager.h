@@ -42,6 +42,10 @@ public:
 
     std::filesystem::path GetConfigDir() const;
     std::filesystem::path GetSettingsFilePath() const;
+    
+    void SetOverrideConfigDir(const std::filesystem::path& path);
 private:
+    std::filesystem::path override_config_dir;
     SettingsManager();
 };
+

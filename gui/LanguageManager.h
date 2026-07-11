@@ -126,6 +126,7 @@ private:
         
         dictionary["EN"]["SAVE_CHANGES"] = wxString::FromUTF8("Save Changes");
         dictionary["EN"]["BTN_KNOWLEDGE"] = wxString::FromUTF8("Knowledge");
+        dictionary["EN"]["BTN_HISTORY"] = wxString::FromUTF8("State History");
         dictionary["EN"]["SYSTEM_LOAD"] = wxString::FromUTF8("SYSTEM LOAD");
         dictionary["EN"]["LOCAL_SERVER_COMBO"] = wxString::FromUTF8("Local Server");
         dictionary["EN"]["CPU_LABEL"] = wxString::FromUTF8("CPU: 0%");
@@ -290,6 +291,7 @@ private:
         
         dictionary["RU"]["SAVE_CHANGES"] = wxString::FromUTF8("Сохранить изменения");
         dictionary["RU"]["BTN_KNOWLEDGE"] = wxString::FromUTF8("Знания");
+        dictionary["RU"]["BTN_HISTORY"] = wxString::FromUTF8("История состояний");
         dictionary["RU"]["SYSTEM_LOAD"] = wxString::FromUTF8("СИСТЕМНАЯ НАГРУЗКА");
         dictionary["RU"]["LOCAL_SERVER_COMBO"] = wxString::FromUTF8("Локальный сервер");
         dictionary["RU"]["CPU_LABEL"] = wxString::FromUTF8("ЦП: 0%");

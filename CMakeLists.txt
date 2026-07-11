@@ -32,6 +32,17 @@ target_link_libraries(mcp_manager PRIVATE
     ${wxWidgets_LIBRARIES}
 )
 
+add_executable(snapshot_tests snapshot_tests.cpp ${MCP_SOURCES} gui/sys_stats.cpp)
+target_include_directories(snapshot_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(snapshot_tests PRIVATE 
+    nlohmann_json::nlohmann_json 
+    httplib::httplib
+    Threads::Threads
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    ${wxWidgets_LIBRARIES}
+)
+
 # ==========================================
 # Install & CPack Configuration
 # ==========================================

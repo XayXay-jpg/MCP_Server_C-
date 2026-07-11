@@ -9,11 +9,21 @@ SettingsManager::SettingsManager() {
 }
 
 std::filesystem::path SettingsManager::GetConfigDir() const {
+    if (!override_config_dir.empty()) {
+        if (!std::filesystem::exists(override_config_dir)) {
+            std::filesystem::create_directories(override_config_dir);
+        }
+        return override_config_dir;
+    }
     wxString configDir = wxStandardPaths::Get().GetUserDataDir();
     if (!wxFileName::DirExists(configDir)) {
         wxFileName::Mkdir(configDir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
     }
     return std::filesystem::path(configDir.ToStdString());
+}
+
+void SettingsManager::SetOverrideConfigDir(const std::filesystem::path& path) {
+    override_config_dir = path;
 }
 
 std::filesystem::path SettingsManager::GetSettingsFilePath() const {

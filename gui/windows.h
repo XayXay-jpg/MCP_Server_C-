@@ -47,6 +47,9 @@ private:
     wxDECLARE_EVENT_TABLE();
 };
 
+class SnapshotGraphPanel;
+class SnapshotConsolePanel;
+
 class Windows : public wxFrame {
 public:
     Windows(const wxString& title);
@@ -64,6 +67,7 @@ private:
     CustomButton* btnCluster = nullptr;
     CustomButton* btnTools = nullptr;
     CustomButton* btnKnowledge = nullptr;
+    CustomButton* btnHistory = nullptr;
     CustomButton* btnGlobalSettings = nullptr;
     
     // Tab bar buttons (horizontal)
@@ -102,6 +106,34 @@ private:
     wxPanel* globalSettingsContainer; // Holds pageGlobalSettings
     
     wxPanel* knowledgeContainer;
+    wxPanel* historyContainer = nullptr;
+    SnapshotGraphPanel* historyGraphPanel = nullptr;
+    SnapshotConsolePanel* historyConsolePanel = nullptr;
+
+    // History Page Action buttons
+    CustomButton* btnCreateSnapshot = nullptr;
+    CustomButton* btnRollbackSelected = nullptr;
+    CustomButton* btnDiscardUnstaged = nullptr;
+
+    // History Details & Staging Sidebar
+    wxPanel* historySidebar = nullptr;
+    wxStaticText* lblDetailsHeader = nullptr;
+    wxStaticText* lblDetailsHash = nullptr;
+    wxStaticText* lblDetailsAuthor = nullptr;
+    wxStaticText* lblDetailsDate = nullptr;
+    wxTextCtrl* txtDetailsMsg = nullptr;
+
+    wxStaticText* lblStagingHeader = nullptr;
+    wxPanel* pnlStagingList = nullptr;
+    wxBoxSizer* stagingListSizer = nullptr;
+
+    wxStaticText* lblServersHeader = nullptr;
+    wxPanel* pnlTargetServersList = nullptr;
+    wxBoxSizer* targetServersListSizer = nullptr;
+    std::vector<std::string> selectedTargetServers;
+
+    wxTextCtrl* txtCommitMsg = nullptr;
+    std::string selectedSnapshotId;
     SlideBook* knowledgeSlideBook = nullptr;
     wxPanel* bookshelfPanel = nullptr;
     wxBoxSizer* bookshelfSizer = nullptr;
@@ -235,6 +267,16 @@ private:
     void OnSidebarCluster(wxCommandEvent& event);
     void OnSidebarTools(wxCommandEvent& event);
     void OnSidebarKnowledge(wxCommandEvent& event);
+    void OnSidebarHistory(wxCommandEvent& event);
+    void OnCreateSnapshot(wxCommandEvent& event);
+    void OnRollbackSelected(wxCommandEvent& event);
+    void OnDiscardUnstaged(wxCommandEvent& event);
+    void OnStageUnstageFile(wxCommandEvent& event);
+    void OnCommitMsgEnter(wxCommandEvent& event);
+    
+    void UpdateHistoryDetailsAndStaging(const std::string& snapshot_id);
+    void RefreshStagingList();
+    void RefreshTargetServersList();
     void OnSidebarGlobalSettings(wxCommandEvent& event);
     
     void RefreshNodesList();

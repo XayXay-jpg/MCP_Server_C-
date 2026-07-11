@@ -1,5 +1,10 @@
 #include "windows.h"
 #include "LanguageManager.h"
+#include "SnapshotGraphPanel.h"
+#include "SnapshotConsolePanel.h"
+#include "StateWarningDialog.h"
+#include "../mcp/SnapshotManager.h"
+#include "../mcp/thread_pool.h"
 #include "../mcp/server.h"
 #include "../mcp/utils.h"
 #include "../mcp/network_utils.h"
@@ -199,8 +204,13 @@ enum {
     ID_ANIM_TIMER,
     ID_COMBO_SERVER_STATS,
     ID_BTN_KNOWLEDGE,
+    ID_BTN_HISTORY,
     ID_LIST_KNOWLEDGE_SECTIONS,
-    ID_BTN_KNOWLEDGE_SAVE
+    ID_BTN_KNOWLEDGE_SAVE,
+    ID_BTN_CREATE_SNAP,
+    ID_BTN_ROLLBACK_SELECTED,
+    ID_BTN_DISCARD_UNSTAGED,
+    ID_BTN_STAGE_UNSTAGE_FILE
 };
 
 class McpConfirmDialog : public wxDialog {
@@ -297,6 +307,11 @@ Windows::Windows(const wxString& title) : wxFrame(NULL, wxID_ANY, title, wxDefau
     // Determine default workspace at runtime — avoids hardcoding any username
     const char* homeDir = getenv("HOME");
     currentWorkspace = homeDir ? std::string(homeDir) + "/llm_workspace" : "/tmp/llm_workspace";
+    
+    // Initialize backend data layers
+    ClusterManager::GetInstance().LoadNodes();
+    KnowledgeLayer::GetInstance().Load(currentWorkspace);
+    SnapshotManager::GetInstance().Initialize(currentWorkspace);
     
     // Set global logger callback to send events to GUI
     g_log_callback = [this](const std::string& msg) {
@@ -503,24 +518,28 @@ void Windows::SetupUI() {
     btnCluster = new CustomButton(sidebarPanel, ID_BTN_CLUSTER, _("Cluster Nodes"));
     btnTools = new CustomButton(sidebarPanel, ID_BTN_TOOLS, _("Tools"));
     btnKnowledge = new CustomButton(sidebarPanel, ID_BTN_KNOWLEDGE, _("Knowledge Base"));
+    btnHistory = new CustomButton(sidebarPanel, ID_BTN_HISTORY, _("State History"));
     btnGlobalSettings = new CustomButton(sidebarPanel, ID_BTN_GLOBAL_SETTINGS, _("Settings"));
     
     btnServerLocal->SetMinSize(wxSize(-1, 40));
     btnCluster->SetMinSize(wxSize(-1, 40));
     btnTools->SetMinSize(wxSize(-1, 40));
     btnKnowledge->SetMinSize(wxSize(-1, 40));
+    btnHistory->SetMinSize(wxSize(-1, 40));
     btnGlobalSettings->SetMinSize(wxSize(-1, 40));
     
     btnServerLocal->SetIndent(15);
     btnCluster->SetIndent(15);
     btnTools->SetIndent(15);
     btnKnowledge->SetIndent(15);
+    btnHistory->SetIndent(15);
     btnGlobalSettings->SetIndent(15);
 
     sidebarSizer->Add(btnServerLocal, 0, wxEXPAND | wxBOTTOM, 5);
     sidebarSizer->Add(btnCluster, 0, wxEXPAND | wxBOTTOM, 5);
     sidebarSizer->Add(btnTools, 0, wxEXPAND | wxBOTTOM, 5);
     sidebarSizer->Add(btnKnowledge, 0, wxEXPAND | wxBOTTOM, 5);
+    sidebarSizer->Add(btnHistory, 0, wxEXPAND | wxBOTTOM, 5);
     sidebarSizer->AddStretchSpacer();
     sidebarSizer->Add(btnGlobalSettings, 0, wxEXPAND | wxBOTTOM, 5);
 
@@ -534,11 +553,13 @@ void Windows::SetupUI() {
     wxBitmap settingsIcon = GetBitmapFromBase64(icon_settings_new_png_base64);
     wxBitmap toolsIcon = GetBitmapFromBase64(icon_tools_png_base64);
     wxBitmap bookIcon = GetBitmapFromBase64(icon_book_png_base64);
+    wxBitmap historyIcon = GetBitmapFromBase64(icon_history_png_base64);
     
     btnServerLocal->SetIcon(serverIcon);
     btnCluster->SetIcon(clusterIcon);
     btnTools->SetIcon(toolsIcon);
     btnKnowledge->SetIcon(bookIcon);
+    btnHistory->SetIcon(historyIcon);
     btnGlobalSettings->SetIcon(settingsIcon);
     
     wxFont btnFont(11, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
@@ -546,6 +567,7 @@ void Windows::SetupUI() {
     btnCluster->SetFont(btnFont);
     btnTools->SetFont(btnFont);
     btnKnowledge->SetFont(btnFont);
+    btnHistory->SetFont(btnFont);
     btnGlobalSettings->SetFont(btnFont);
 
     wxBitmap appIconBmp = GetBitmapFromBase64(icon_logo_small_png_base64);
@@ -1153,6 +1175,121 @@ void Windows::SetupUI() {
     
     knowledgeContainer->SetSizer(knowledgeSizer);
     rootBook->AddPage(knowledgeContainer, "KnowledgeContainer");
+    
+    // === PAGE 4: HISTORY CONTAINER ===
+    historyContainer = new wxPanel(rootBook, wxID_ANY);
+    historyContainer->SetBackgroundColour(wxColour("#0B0F19")); // Sleek dark theme
+    wxBoxSizer* historySizer = new wxBoxSizer(wxVERTICAL);
+
+    // Header
+    wxPanel* histHeader = new wxPanel(historyContainer, wxID_ANY);
+    histHeader->SetBackgroundColour(wxColour("#0B0F19"));
+    wxBoxSizer* histHeaderSizer = new wxBoxSizer(wxHORIZONTAL);
+    
+    wxStaticText* lblHistHeader = new wxStaticText(histHeader, wxID_ANY, lang.GetString("BTN_HISTORY"));
+    lblHistHeader->SetFont(wxFontInfo(20).Bold());
+    lblHistHeader->SetForegroundColour(wxColour("#F4F4F5"));
+    histHeaderSizer->Add(lblHistHeader, 0, wxALIGN_CENTER_VERTICAL | wxALL, 10);
+    
+    histHeader->SetSizer(histHeaderSizer);
+    historySizer->Add(histHeader, 0, wxEXPAND);
+
+    // Middle splitter (Graph 65% + Sidebar Details 35%)
+    wxBoxSizer* middleSizer = new wxBoxSizer(wxHORIZONTAL);
+    
+    historyGraphPanel = new SnapshotGraphPanel(historyContainer, wxID_ANY);
+    middleSizer->Add(historyGraphPanel, 65, wxEXPAND | wxRIGHT, 5);
+    
+    // Details & Staging Sidebar
+    historySidebar = new wxPanel(historyContainer, wxID_ANY);
+    historySidebar->SetBackgroundColour(wxColour("#0F172A")); // Very dark slate
+    wxBoxSizer* histSidebarSizer = new wxBoxSizer(wxVERTICAL);
+    
+    lblDetailsHeader = new wxStaticText(historySidebar, wxID_ANY, "COMMIT DETAILS");
+    lblDetailsHeader->SetFont(wxFontInfo(11).Bold());
+    lblDetailsHeader->SetForegroundColour(wxColour("#6366F1")); // Indigo
+    histSidebarSizer->Add(lblDetailsHeader, 0, wxALL, 10);
+    
+    lblDetailsHash = new wxStaticText(historySidebar, wxID_ANY, "Hash: N/A");
+    lblDetailsHash->SetForegroundColour(wxColour("#94A3B8"));
+    lblDetailsHash->SetFont(wxFontInfo(9).Bold());
+    histSidebarSizer->Add(lblDetailsHash, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
+    
+    lblDetailsAuthor = new wxStaticText(historySidebar, wxID_ANY, "Author: N/A");
+    lblDetailsAuthor->SetForegroundColour(wxColour("#94A3B8"));
+    histSidebarSizer->Add(lblDetailsAuthor, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
+    
+    lblDetailsDate = new wxStaticText(historySidebar, wxID_ANY, "Date: N/A");
+    lblDetailsDate->SetForegroundColour(wxColour("#94A3B8"));
+    histSidebarSizer->Add(lblDetailsDate, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
+    
+    txtDetailsMsg = new wxTextCtrl(historySidebar, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 80), 
+                                   wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
+    txtDetailsMsg->SetBackgroundColour(wxColour("#1E293B")); // Slate-800
+    txtDetailsMsg->SetForegroundColour(wxColour("#E2E8F0"));
+    histSidebarSizer->Add(txtDetailsMsg, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+    
+    // Divider
+    wxPanel* divider = new wxPanel(historySidebar, wxID_ANY, wxDefaultPosition, wxSize(-1, 1));
+    divider->SetBackgroundColour(wxColour("#334155"));
+    histSidebarSizer->Add(divider, 0, wxEXPAND | wxTOP | wxBOTTOM, 10);
+    
+    lblStagingHeader = new wxStaticText(historySidebar, wxID_ANY, "WORKSPACE STATUS");
+    lblStagingHeader->SetFont(wxFontInfo(11).Bold());
+    lblStagingHeader->SetForegroundColour(wxColour("#10B981")); // Green
+    histSidebarSizer->Add(lblStagingHeader, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
+    
+    pnlStagingList = new wxPanel(historySidebar, wxID_ANY);
+    pnlStagingList->SetBackgroundColour(wxColour("#0F172A"));
+    stagingListSizer = new wxBoxSizer(wxVERTICAL);
+    pnlStagingList->SetSizer(stagingListSizer);
+    histSidebarSizer->Add(pnlStagingList, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+    
+    lblServersHeader = new wxStaticText(historySidebar, wxID_ANY, "APPLY TO SERVERS");
+    lblServersHeader->SetFont(wxFontInfo(11).Bold());
+    lblServersHeader->SetForegroundColour(wxColour("#6366F1")); // Indigo
+    histSidebarSizer->Add(lblServersHeader, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
+    
+    pnlTargetServersList = new wxPanel(historySidebar, wxID_ANY);
+    pnlTargetServersList->SetBackgroundColour(wxColour("#0F172A"));
+    targetServersListSizer = new wxBoxSizer(wxVERTICAL);
+    pnlTargetServersList->SetSizer(targetServersListSizer);
+    histSidebarSizer->Add(pnlTargetServersList, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+
+    txtCommitMsg = new wxTextCtrl(historySidebar, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 32),
+                                  wxTE_PROCESS_ENTER | wxBORDER_SIMPLE);
+    txtCommitMsg->SetBackgroundColour(wxColour("#1E293B"));
+    txtCommitMsg->SetForegroundColour(wxColour("#E2E8F0"));
+    txtCommitMsg->SetHint("Commit message... (Press Enter)");
+    histSidebarSizer->Add(txtCommitMsg, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+    
+    historySidebar->SetSizer(histSidebarSizer);
+    middleSizer->Add(historySidebar, 35, wxEXPAND | wxALL, 5);
+    
+    historySizer->Add(middleSizer, 3, wxEXPAND);
+    
+    // Console at the bottom
+    historyConsolePanel = new SnapshotConsolePanel(historyContainer, wxID_ANY);
+    historySizer->Add(historyConsolePanel, 1, wxEXPAND | wxALL, 5);
+    
+    historyContainer->SetSizer(historySizer);
+    rootBook->AddPage(historyContainer, "HistoryContainer");
+
+    // Bind Graph Panel callbacks
+    historyGraphPanel->onNodeSelected = [this](const std::string& snapshot_id) {
+        UpdateHistoryDetailsAndStaging(snapshot_id);
+    };
+    historyGraphPanel->onRollbackRequested = [this](const std::string& snapshot_id) {
+        selectedSnapshotId = snapshot_id;
+        wxCommandEvent dummy;
+        OnRollbackSelected(dummy);
+    };
+    historyGraphPanel->onDiscardAllRequested = [this]() {
+        wxCommandEvent dummy;
+        OnDiscardUnstaged(dummy);
+    };
+
+    txtCommitMsg->Bind(wxEVT_TEXT_ENTER, &Windows::OnCommitMsgEnter, this);
     // ---------------------------------
     
     RefreshToolsList();
@@ -1448,6 +1585,12 @@ void Windows::ApplyTheme() {
     btnKnowledge->SetForegroundColour(mutedColor);
     btnKnowledge->SetHoverColour(wxColour("#1F1F24"));
     
+    if (btnHistory) {
+        btnHistory->SetBackgroundColour(transparentBg);
+        btnHistory->SetForegroundColour(mutedColor);
+        btnHistory->SetHoverColour(wxColour("#1F1F24"));
+    }
+    
     btnGlobalSettings->SetBackgroundColour(transparentBg);
     btnGlobalSettings->SetForegroundColour(mutedColor);
     btnGlobalSettings->SetHoverColour(wxColour("#1F1F24"));
@@ -1457,6 +1600,7 @@ void Windows::ApplyTheme() {
     btnCluster->SetIcon(RecolorIconBmp(icon_cluster_png_base64, iconColor));
     btnTools->SetIcon(RecolorIconBmp(icon_tools_png_base64, iconColor));
     btnKnowledge->SetIcon(RecolorIconBmp(icon_book_png_base64, iconColor));
+    if (btnHistory) btnHistory->SetIcon(RecolorIconBmp(icon_history_png_base64, iconColor));
     btnGlobalSettings->SetIcon(RecolorIconBmp(icon_settings_png_base64, iconColor));
     
     btnTabOverview->SetBackgroundColour(transparentBg);
@@ -1529,6 +1673,7 @@ void Windows::ApplyTheme() {
     btnCluster->SetMinSize(wxSize(btnWidth, 40));
     btnTools->SetMinSize(wxSize(btnWidth, 40));
     btnKnowledge->SetMinSize(wxSize(btnWidth, 40));
+    if (btnHistory) btnHistory->SetMinSize(wxSize(btnWidth, 40));
     btnGlobalSettings->SetMinSize(wxSize(btnWidth, 40));
     
     if (compact) {
@@ -1539,6 +1684,7 @@ void Windows::ApplyTheme() {
         btnCluster->SetIndent(0);
         btnTools->SetIndent(0);
         btnKnowledge->SetIndent(0);
+        if (btnHistory) btnHistory->SetIndent(0);
         btnGlobalSettings->SetIndent(0);
     } else {
         logoImg->Show();
@@ -1548,6 +1694,7 @@ void Windows::ApplyTheme() {
         btnCluster->SetIndent(15);
         btnTools->SetIndent(15);
         btnKnowledge->SetIndent(15);
+        if (btnHistory) btnHistory->SetIndent(15);
         btnGlobalSettings->SetIndent(15);
     }
     
@@ -1564,6 +1711,7 @@ void Windows::UpdateLanguage() {
     btnCluster->SetLabel(compact ? "" : lang.GetString("CLUSTER_NODES"));
     btnTools->SetLabel(compact ? "" : lang.GetString("TOOLS"));
     btnKnowledge->SetLabel(compact ? "" : lang.GetString("BTN_KNOWLEDGE"));
+    if (btnHistory) btnHistory->SetLabel(compact ? "" : lang.GetString("BTN_HISTORY"));
     btnGlobalSettings->SetLabel(compact ? "" : lang.GetString("GLOBAL_SETTINGS"));
     
     btnTabOverview->SetLabel(lang.GetString("TAB_OVERVIEW"));
@@ -1667,6 +1815,7 @@ void Windows::UpdateSidebarSelection(CustomButton* selected) {
     btnCluster->SetSelected(btnCluster == selected);
     btnTools->SetSelected(btnTools == selected);
     btnKnowledge->SetSelected(btnKnowledge == selected);
+    if (btnHistory) btnHistory->SetSelected(btnHistory == selected);
     btnGlobalSettings->SetSelected(btnGlobalSettings == selected);
 }
 
@@ -1851,11 +2000,24 @@ void Windows::OnKnowledgeSave(wxCommandEvent& event) {
 }
 
 void Windows::OnSidebarGlobalSettings(wxCommandEvent& event) {
-    if (rootBook->GetSelection() == 4) return;
+    if (rootBook->GetSelection() == 5) return;
     CancelSidebarAnimation();
     UpdateSidebarSelection(btnGlobalSettings);
-    rootBook->ChangeSelection(4); // GlobalSettingsContainer
+    rootBook->ChangeSelection(5); // GlobalSettingsContainer
     UpdateTabSelection(nullptr);
+}
+
+void Windows::OnSidebarHistory(wxCommandEvent& event) {
+    if (rootBook->GetSelection() == 4) return;
+    CancelSidebarAnimation();
+    UpdateSidebarSelection(btnHistory);
+    rootBook->ChangeSelection(4); // HistoryContainer
+    UpdateTabSelection(nullptr);
+    if (historyGraphPanel) {
+        historyGraphPanel->LoadGraphData();
+    }
+    RefreshStagingList();
+    UpdateHistoryDetailsAndStaging("");
 }
 
 void Windows::OnSidebarCluster(wxCommandEvent& event) {
@@ -2813,6 +2975,7 @@ wxBEGIN_EVENT_TABLE(Windows, wxFrame)
     EVT_BUTTON(ID_BTN_CLUSTER,      Windows::OnSidebarCluster)
     EVT_BUTTON(ID_BTN_TOOLS,        Windows::OnSidebarTools)
     EVT_BUTTON(ID_BTN_KNOWLEDGE,    Windows::OnSidebarKnowledge)
+    EVT_BUTTON(ID_BTN_HISTORY,      Windows::OnSidebarHistory)
     EVT_BUTTON(ID_BTN_GLOBAL_SETTINGS, Windows::OnSidebarGlobalSettings)
     EVT_BUTTON(ID_BTN_TAB_OVERVIEW,  Windows::OnTabOverview)
     EVT_BUTTON(ID_BTN_TAB_CONNECTIONS,Windows::OnTabConnections)
@@ -2859,11 +3022,13 @@ void Windows::OnToggleCompact(wxCommandEvent& event) {
         btnCluster->SetLabel("");
         btnTools->SetLabel("");
         btnKnowledge->SetLabel("");
+        if (btnHistory) btnHistory->SetLabel("");
         btnGlobalSettings->SetLabel("");
         btnServerLocal->SetIndent(0);
         btnCluster->SetIndent(0);
         btnTools->SetIndent(0);
         btnKnowledge->SetIndent(0);
+        if (btnHistory) btnHistory->SetIndent(0);
         btnGlobalSettings->SetIndent(0);
     } else {
         auto& lang = LanguageManager::Get();
@@ -2871,11 +3036,13 @@ void Windows::OnToggleCompact(wxCommandEvent& event) {
         btnCluster->SetLabel(lang.GetString("CLUSTER_NODES"));
         btnTools->SetLabel(lang.GetString("TOOLS"));
         btnKnowledge->SetLabel(lang.GetString("BTN_KNOWLEDGE"));
+        if (btnHistory) btnHistory->SetLabel(lang.GetString("BTN_HISTORY"));
         btnGlobalSettings->SetLabel(lang.GetString("GLOBAL_SETTINGS"));
         btnServerLocal->SetIndent(15);
         btnCluster->SetIndent(15);
         btnTools->SetIndent(15);
         btnKnowledge->SetIndent(15);
+        if (btnHistory) btnHistory->SetIndent(15);
         btnGlobalSettings->SetIndent(15);
     }
     
@@ -2920,7 +3087,8 @@ void Windows::OnAnimTimer(wxTimerEvent& event) {
     
     sidebarPanel->SetMinSize(wxSize(currentSidebarWidth, -1));
     this->Layout();
-    this->Refresh();
+    sidebarPanel->Refresh();
+    btnToggleCompact->Refresh();
     
     if (currentSidebarWidth == targetSidebarWidth) {
         double finalProgress = SettingsManager::Get().compactMode ? 0.0 : 1.0;
@@ -2971,4 +3139,584 @@ void Windows::OnMcpConfirmRequest(wxThreadEvent& event) {
     }
 
     ConfirmationManager::GetInstance().ResolveConfirmation(req_id, approved);
+}
+
+void Windows::OnCreateSnapshot(wxCommandEvent& event) {
+    auto& sm = SnapshotManager::GetInstance();
+    
+    bool commit_only_staged = false;
+    std::vector<std::string> unstaged_files;
+    if (sm.IsKnowledgeModified() && !sm.IsKnowledgeStaged()) {
+        unstaged_files.push_back("mcp_knowledge.json");
+    }
+    if (sm.IsTopologyModified() && !sm.IsTopologyStaged()) {
+        unstaged_files.push_back("cluster_nodes.json");
+    }
+    
+    if (!unstaged_files.empty()) {
+        StateWarningDialog warningDlg(this, "Unstaged Changes",
+                                     "Some modified files are not staged for commit. Do you want to stage them now and commit all changes, or commit only currently staged files?",
+                                     unstaged_files, "Stage All & Commit", "Commit Staged Only");
+        if (warningDlg.ShowModal() == wxID_OK) {
+            if (warningDlg.GetChoice() == SW_ACTION_PRIMARY) {
+                for (const auto& file : unstaged_files) {
+                    sm.StageChange(file);
+                }
+            } else if (warningDlg.GetChoice() == SW_ACTION_SECONDARY) {
+                commit_only_staged = true;
+                if (!sm.IsKnowledgeStaged() && !sm.IsTopologyStaged()) {
+                    wxMessageBox("No changes are staged for commit. Please stage at least one file or choose 'Stage All & Commit'.", "Error", wxOK | wxICON_ERROR);
+                    return;
+                }
+            } else {
+                return; // Cancel
+            }
+        } else {
+            return; // Cancel
+        }
+    } else {
+        if (!sm.IsKnowledgeStaged() && !sm.IsTopologyStaged()) {
+            wxMessageBox("No changes detected in workspace to commit.", "Info", wxOK | wxICON_INFORMATION);
+            return;
+        }
+    }
+
+    wxTextEntryDialog dlg(this, "Enter snapshot description / commit message:", "Create State Snapshot");
+    if (dlg.ShowModal() == wxID_OK) {
+        wxString msg = dlg.GetValue();
+        if (msg.Trim().IsEmpty()) {
+            wxMessageBox("Snapshot description cannot be empty.", "Error", wxOK | wxICON_ERROR);
+            return;
+        }
+        
+        std::vector<std::string> targets = selectedTargetServers;
+        
+        ThreadPool::GetInstance().enqueue([this, msg, targets, commit_only_staged]() {
+            auto& sm = SnapshotManager::GetInstance();
+            auto snap = sm.CreateSnapshot(SnapshotAuthor::Human, "Admin", msg.ToStdString(), commit_only_staged);
+            
+            // Trigger remote snapshot on checked child servers
+            for (const auto& nodeId : targets) {
+                ClusterNode node;
+                if (ClusterManager::GetInstance().GetNode(nodeId, node)) {
+                    std::string host = node.ip_address;
+                    int port = 3000;
+                    size_t colon = host.find(':');
+                    if (colon != std::string::npos) {
+                        try {
+                            port = std::stoi(host.substr(colon + 1));
+                        } catch(...) {}
+                        host = host.substr(0, colon);
+                    }
+                    
+                    ThreadPool::GetInstance().enqueue([host, port, msg, nodeId]() {
+                        httplib::Client cli(host, port);
+                        cli.set_connection_timeout(5, 0);
+                        cli.set_read_timeout(10, 0);
+                        
+                        nlohmann::json req_data = {
+                            {"description", msg.ToStdString()},
+                            {"author", "Parent Server"}
+                        };
+                        
+                        mcp_log("[Cluster] Sending snapshot request to child node '" + nodeId + "' at " + host + ":" + std::to_string(port));
+                        
+                        if (auto res = cli.Post("/cluster/snapshot", req_data.dump(), "application/json")) {
+                            if (res->status == 200) {
+                                mcp_log("[Cluster] Child node '" + nodeId + "' snapshot success!");
+                            } else {
+                                mcp_log("[Error] Child node '" + nodeId + "' failed to snapshot: HTTP " + std::to_string(res->status));
+                            }
+                        } else {
+                            mcp_log("[Error] Failed to connect to child node '" + nodeId + "' for snapshot");
+                        }
+                    });
+                }
+            }
+            
+            CallAfter([this, snap]() {
+                if (snap) {
+                    wxMessageBox("Snapshot created successfully!", "Success", wxOK | wxICON_INFORMATION);
+                    historyGraphPanel->LoadGraphData();
+                    RefreshStagingList();
+                } else {
+                    wxMessageBox("Failed to create snapshot.", "Error", wxOK | wxICON_ERROR);
+                }
+            });
+        });
+    }
+}
+
+void Windows::OnRollbackSelected(wxCommandEvent& event) {
+    if (selectedSnapshotId.empty()) return;
+    
+    auto snap = SnapshotManager::GetInstance().GetSnapshot(selectedSnapshotId);
+    if (!snap) return;
+    
+    auto& sm = SnapshotManager::GetInstance();
+    std::vector<std::string> unsaved_files;
+    if (sm.IsKnowledgeModified()) unsaved_files.push_back("mcp_knowledge.json");
+    if (sm.IsTopologyModified()) unsaved_files.push_back("cluster_nodes.json");
+    
+    if (!unsaved_files.empty()) {
+        StateWarningDialog warningDlg(this, "Unsaved Changes",
+                                     "You have unsaved changes in your working directory. Rolling back will overwrite these changes and they will be lost.",
+                                     unsaved_files, "Save Changes First", "Rollback Anyway", true);
+        if (warningDlg.ShowModal() == wxID_OK) {
+            if (warningDlg.GetChoice() == SW_ACTION_PRIMARY) {
+                wxCommandEvent dummy;
+                OnCreateSnapshot(dummy);
+                return; // Stop current rollback
+            } else if (warningDlg.GetChoice() == SW_ACTION_SECONDARY) {
+                // Proceed with rollback
+            } else {
+                return; // Cancel
+            }
+        } else {
+            return; // Cancel
+        }
+    }
+    
+    wxString msg = wxString::Format("Are you sure you want to rollback to this state?\n\nCommit: %s\nAuthor: %s\nDescription: %s",
+                                    snap->id.substr(0, 8), snap->author_name, snap->description);
+    if (wxMessageBox(msg, "Confirm Rollback", wxYES_NO | wxICON_WARNING, this) == wxYES) {
+        std::vector<std::string> targets = selectedTargetServers;
+        
+        ThreadPool::GetInstance().enqueue([this, targets, snap]() {
+            bool ok = SnapshotManager::GetInstance().RollbackTo(selectedSnapshotId);
+            
+            if (ok) {
+                // Rollback connected target child nodes
+                for (const auto& nodeId : targets) {
+                    ClusterNode node;
+                    if (ClusterManager::GetInstance().GetNode(nodeId, node)) {
+                        std::string host = node.ip_address;
+                        int port = 3000;
+                        size_t colon = host.find(':');
+                        if (colon != std::string::npos) {
+                            try {
+                                port = std::stoi(host.substr(colon + 1));
+                            } catch(...) {}
+                            host = host.substr(0, colon);
+                        }
+                        
+                        ThreadPool::GetInstance().enqueue([host, port, nodeId, snapDesc = snap->description, snapId = snap->id]() {
+                            httplib::Client cli(host, port);
+                            cli.set_connection_timeout(5, 0);
+                            cli.set_read_timeout(10, 0);
+                            
+                            nlohmann::json req_data = {
+                                {"snapshot_id", snapId}
+                            };
+                            
+                            mcp_log("[Cluster] Sending rollback request to child node '" + nodeId + "' for snapshot: " + snapId);
+                            
+                            if (auto res = cli.Post("/cluster/rollback", req_data.dump(), "application/json")) {
+                                if (res->status == 200) {
+                                    mcp_log("[Cluster] Child node '" + nodeId + "' rollback success!");
+                                } else {
+                                    // Try by description
+                                    nlohmann::json req_desc = {
+                                        {"snapshot_id", snapDesc}
+                                    };
+                                    if (auto res_desc = cli.Post("/cluster/rollback", req_desc.dump(), "application/json")) {
+                                        if (res_desc->status == 200) {
+                                            mcp_log("[Cluster] Child node '" + nodeId + "' rollback success (by description)!");
+                                            return;
+                                        }
+                                    }
+                                    mcp_log("[Error] Child node '" + nodeId + "' failed to rollback: HTTP " + std::to_string(res->status));
+                                }
+                            } else {
+                                mcp_log("[Error] Failed to connect to child node '" + nodeId + "' for rollback");
+                            }
+                        });
+                    }
+                }
+            }
+            
+            CallAfter([this, ok]() {
+                if (ok) {
+                    wxMessageBox("Successfully rolled back to the selected state.", "Rollback Complete", wxOK | wxICON_INFORMATION);
+                } else {
+                    wxMessageBox("Failed to perform rollback to the selected state.", "Error", wxOK | wxICON_ERROR);
+                }
+                historyGraphPanel->LoadGraphData();
+                RefreshStagingList();
+            });
+        });
+    }
+}
+
+void Windows::OnDiscardUnstaged(wxCommandEvent& event) {
+    wxString msg = "Are you sure you want to discard all uncommitted changes? This cannot be undone.";
+    if (wxMessageBox(msg, "Confirm Discard", wxYES_NO | wxICON_WARNING, this) == wxYES) {
+        ThreadPool::GetInstance().enqueue([this]() {
+            bool ok = SnapshotManager::GetInstance().ResetHard();
+            CallAfter([this, ok]() {
+                if (ok) {
+                    wxMessageBox("Restored working tree from HEAD.", "Changes Discarded", wxOK | wxICON_INFORMATION);
+                } else {
+                    wxMessageBox("Failed to discard changes.", "Error", wxOK | wxICON_ERROR);
+                }
+                historyGraphPanel->LoadGraphData();
+                RefreshStagingList();
+            });
+        });
+    }
+}
+
+void Windows::OnStageUnstageFile(wxCommandEvent& event) {
+    wxWindow* obj = dynamic_cast<wxWindow*>(event.GetEventObject());
+    if (!obj) return;
+    
+    std::string file = obj->GetName().ToStdString();
+    auto& sm = SnapshotManager::GetInstance();
+    
+    if (file == "mcp_knowledge.json") {
+        if (sm.IsKnowledgeStaged()) sm.UnstageChange(file);
+        else sm.StageChange(file);
+    } else if (file == "cluster_nodes.json") {
+        if (sm.IsTopologyStaged()) sm.UnstageChange(file);
+        else sm.StageChange(file);
+    }
+    
+    RefreshStagingList();
+}
+
+void Windows::UpdateHistoryDetailsAndStaging(const std::string& snapshot_id) {
+    selectedSnapshotId = snapshot_id;
+    
+    if (snapshot_id == "workspace_modified") {
+        if (btnRollbackSelected) btnRollbackSelected->Disable();
+        lblDetailsHash->SetLabel("Hash: Uncommitted");
+        lblDetailsAuthor->SetLabel("Author: You [Human]");
+        lblDetailsDate->SetLabel("Date: Current");
+        
+        std::string msg = "These are uncommitted changes in your workspace (Current State).\n\n";
+        msg += "You can stage/unstage files in the sidebar and press Enter in the commit text field to save them,\n";
+        msg += "or right-click this node and select 'Discard all changes' to discard your changes.";
+        txtDetailsMsg->SetValue(wxString::FromUTF8(msg));
+        historySidebar->Layout();
+        return;
+    }
+    
+    auto snap = SnapshotManager::GetInstance().GetSnapshot(snapshot_id);
+    if (snap) {
+        if (btnRollbackSelected) btnRollbackSelected->Enable();
+        lblDetailsHash->SetLabel("Hash: " + snapshot_id.substr(0, 12) + "...");
+        lblDetailsAuthor->SetLabel("Author: " + snap->author_name + " [" + 
+                                   (snap->author == SnapshotAuthor::Human ? "Human" : "AI Agent") + "]");
+        
+        // Format time
+        std::time_t t = std::chrono::system_clock::to_time_t(snap->timestamp);
+        char time_buf[100];
+        if (std::strftime(time_buf, sizeof(time_buf), "%c", std::localtime(&t))) {
+            lblDetailsDate->SetLabel("Date: " + std::string(time_buf));
+        } else {
+            lblDetailsDate->SetLabel("Date: Unknown");
+        }
+        
+        std::string full_msg = snap->description;
+        full_msg += "\n\n=== SYSTEM ENVIRONMENT STATE ===";
+        full_msg += "\nDatabase/Daemon Services:";
+        if (!snap->system_state.services_status.empty()) {
+            for (auto it = snap->system_state.services_status.begin(); it != snap->system_state.services_status.end(); ++it) {
+                full_msg += "\n  " + it.key() + ": " + it.value().get<std::string>();
+            }
+        } else {
+            full_msg += "\n  No service status captured.";
+        }
+        
+        full_msg += "\nEnvironment Variables:";
+        if (!snap->system_state.env_vars.empty()) {
+            for (auto it = snap->system_state.env_vars.begin(); it != snap->system_state.env_vars.end(); ++it) {
+                full_msg += "\n  " + it.key() + "=" + it.value().get<std::string>();
+            }
+        } else {
+            full_msg += "\n  No environment variables captured.";
+        }
+
+        full_msg += "\nGit Configuration:";
+        if (!snap->system_state.git_config.empty()) {
+            full_msg += "\n  " + std::to_string(snap->system_state.git_config.size()) + " variables captured.";
+        } else {
+            full_msg += "\n  No git configurations captured.";
+        }
+
+        full_msg += "\nConfig Files Captured:";
+        if (!snap->system_state.custom_files.empty()) {
+            for (auto it = snap->system_state.custom_files.begin(); it != snap->system_state.custom_files.end(); ++it) {
+                full_msg += "\n  " + it.key();
+            }
+        } else {
+            full_msg += "\n  No files captured.";
+        }
+
+        txtDetailsMsg->SetValue(wxString::FromUTF8(full_msg));
+    } else {
+        if (btnRollbackSelected) btnRollbackSelected->Disable();
+        lblDetailsHash->SetLabel("Hash: N/A");
+        lblDetailsAuthor->SetLabel("Author: N/A");
+        lblDetailsDate->SetLabel("Date: N/A");
+        txtDetailsMsg->Clear();
+    }
+    
+    historySidebar->Layout();
+}
+
+void Windows::RefreshStagingList() {
+    stagingListSizer->Clear(true); // Delete child controls
+    
+    auto& sm = SnapshotManager::GetInstance();
+    bool know_mod = sm.IsKnowledgeModified();
+    bool topo_mod = sm.IsTopologyModified();
+    
+    if (!know_mod && !topo_mod) {
+        wxStaticText* lblClean = new wxStaticText(pnlStagingList, wxID_ANY, "Working tree clean");
+        lblClean->SetForegroundColour(wxColour("#10B981")); // Green
+        lblClean->SetFont(wxFontInfo(10).Italic());
+        stagingListSizer->Add(lblClean, 0, wxALL, 10);
+    } else {
+        auto add_row = [this, &sm](const std::string& filename, bool is_staged) {
+            wxBoxSizer* rowSizer = new wxBoxSizer(wxHORIZONTAL);
+            
+            // Checkbox for staging/unstaging
+            wxCheckBox* chk = new wxCheckBox(pnlStagingList, wxID_ANY, filename);
+            chk->SetValue(is_staged);
+            chk->SetForegroundColour(wxColour("#E2E8F0"));
+            chk->SetFont(wxFontInfo(10));
+            rowSizer->Add(chk, 1, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+            
+            wxStaticText* lblStatus = new wxStaticText(pnlStagingList, wxID_ANY, is_staged ? "Staged" : "Modified");
+            lblStatus->SetForegroundColour(is_staged ? wxColour("#10B981") : wxColour("#F59E0B"));
+            lblStatus->SetFont(wxFontInfo(9).Bold());
+            rowSizer->Add(lblStatus, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+            
+            chk->Bind(wxEVT_CHECKBOX, [this, filename](wxCommandEvent& ev) {
+                auto& sm = SnapshotManager::GetInstance();
+                if (ev.IsChecked()) {
+                    sm.StageChange(filename);
+                } else {
+                    sm.UnstageChange(filename);
+                }
+                RefreshStagingList();
+            });
+            
+            chk->Bind(wxEVT_RIGHT_DOWN, [this, filename](wxMouseEvent& ev) {
+                wxMenu menu;
+                menu.Append(10003, "Discard changes to this file");
+                
+                menu.Bind(wxEVT_MENU, [this, filename](wxCommandEvent& evMenu) {
+                    if (evMenu.GetId() == 10003) {
+                        wxString confirmMsg = wxString::Format("Are you sure you want to discard all local changes to %s?", filename);
+                        if (wxMessageBox(confirmMsg, "Discard Changes", wxYES_NO | wxICON_WARNING, this) == wxYES) {
+                            auto& sm = SnapshotManager::GetInstance();
+                            auto head_state = sm.ReconstructState(sm.GetCurrentActiveId());
+                            if (head_state) {
+                                if (filename == "mcp_knowledge.json") {
+                                    std::filesystem::path knowPath = std::filesystem::path(sm.GetWorkspacePath()) / "mcp_knowledge.json";
+                                    std::ofstream kf(knowPath);
+                                    if (kf.is_open()) {
+                                        kf << head_state->knowledge_data.dump(4);
+                                        kf.close();
+                                    }
+                                    KnowledgeLayer::GetInstance().Load(sm.GetWorkspacePath());
+                                    sm.UnstageChange("mcp_knowledge.json");
+                                } else if (filename == "cluster_nodes.json") {
+                                    std::filesystem::path nodePath = std::filesystem::path(sm.GetWorkspacePath()) / "cluster_nodes.json";
+                                    std::ofstream nf(nodePath);
+                                    if (nf.is_open()) {
+                                        nlohmann::json nodes_array = nlohmann::json::array();
+                                        for (const auto& n : head_state->nodes) {
+                                            nodes_array.push_back({
+                                                {"id", n.id}, {"ip_address", n.ip_address}, {"status", n.status},
+                                                {"hostname", n.hostname}, {"platform", n.platform}, {"os_version", n.os_version},
+                                                {"local_ip", n.local_ip}, {"app_version", n.app_version}, {"is_parent", n.is_parent},
+                                                {"master_token", n.master_token}, {"encryption_key", n.encryption_key}, {"last_seen", n.last_seen}
+                                            });
+                                        }
+                                        nf << nodes_array.dump(4);
+                                        nf.close();
+                                    }
+                                    ClusterManager::GetInstance().LoadNodes();
+                                    sm.UnstageChange("cluster_nodes.json");
+                                }
+                                RefreshStagingList();
+                                if (historyGraphPanel) {
+                                    historyGraphPanel->LoadGraphData();
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                PopupMenu(&menu, ev.GetPosition());
+            });
+            
+            stagingListSizer->Add(rowSizer, 0, wxEXPAND | wxBOTTOM, 5);
+        };
+        
+        if (know_mod) {
+            add_row("mcp_knowledge.json", sm.IsKnowledgeStaged());
+        }
+        if (topo_mod) {
+            add_row("cluster_nodes.json", sm.IsTopologyStaged());
+        }
+    }
+    
+    pnlStagingList->Layout();
+    RefreshTargetServersList();
+    historySidebar->Layout();
+}
+
+void Windows::OnCommitMsgEnter(wxCommandEvent& event) {
+    wxString msg = txtCommitMsg->GetValue();
+    if (msg.Trim().IsEmpty()) {
+        wxMessageBox("Snapshot description cannot be empty.", "Error", wxOK | wxICON_ERROR);
+        return;
+    }
+    
+    auto& sm = SnapshotManager::GetInstance();
+    
+    bool commit_only_staged = false;
+    std::vector<std::string> unstaged_files;
+    if (sm.IsKnowledgeModified() && !sm.IsKnowledgeStaged()) {
+        unstaged_files.push_back("mcp_knowledge.json");
+    }
+    if (sm.IsTopologyModified() && !sm.IsTopologyStaged()) {
+        unstaged_files.push_back("cluster_nodes.json");
+    }
+    
+    if (!unstaged_files.empty()) {
+        StateWarningDialog warningDlg(this, "Unstaged Changes",
+                                     "Some modified files are not staged for commit. Do you want to stage them now and commit all changes, or commit only currently staged files?",
+                                     unstaged_files, "Stage All & Commit", "Commit Staged Only");
+        if (warningDlg.ShowModal() == wxID_OK) {
+            if (warningDlg.GetChoice() == SW_ACTION_PRIMARY) {
+                for (const auto& file : unstaged_files) {
+                    sm.StageChange(file);
+                }
+            } else if (warningDlg.GetChoice() == SW_ACTION_SECONDARY) {
+                commit_only_staged = true;
+                if (!sm.IsKnowledgeStaged() && !sm.IsTopologyStaged()) {
+                    wxMessageBox("No changes are staged for commit. Please stage at least one file or choose 'Stage All & Commit'.", "Error", wxOK | wxICON_ERROR);
+                    return;
+                }
+            } else {
+                return; // Cancel
+            }
+        } else {
+            return; // Cancel
+        }
+    } else {
+        if (!sm.IsKnowledgeStaged() && !sm.IsTopologyStaged()) {
+            wxMessageBox("No changes detected in workspace to commit.", "Info", wxOK | wxICON_INFORMATION);
+            return;
+        }
+    }
+    
+    std::vector<std::string> targets = selectedTargetServers;
+    
+    ThreadPool::GetInstance().enqueue([this, msg, targets, commit_only_staged]() {
+        auto& sm = SnapshotManager::GetInstance();
+        auto snap = sm.CreateSnapshot(SnapshotAuthor::Human, "Admin", msg.ToStdString(), commit_only_staged);
+        
+        // Trigger remote snapshot on checked child servers
+        for (const auto& nodeId : targets) {
+            ClusterNode node;
+            if (ClusterManager::GetInstance().GetNode(nodeId, node)) {
+                std::string host = node.ip_address;
+                int port = 3000;
+                size_t colon = host.find(':');
+                if (colon != std::string::npos) {
+                    try {
+                        port = std::stoi(host.substr(colon + 1));
+                    } catch(...) {}
+                    host = host.substr(0, colon);
+                }
+                
+                ThreadPool::GetInstance().enqueue([host, port, msg, nodeId]() {
+                    httplib::Client cli(host, port);
+                    cli.set_connection_timeout(5, 0);
+                    cli.set_read_timeout(10, 0);
+                    
+                    nlohmann::json req_data = {
+                        {"description", msg.ToStdString()},
+                        {"author", "Parent Server"}
+                    };
+                    
+                    mcp_log("[Cluster] Sending snapshot request to child node '" + nodeId + "' at " + host + ":" + std::to_string(port));
+                    
+                    if (auto res = cli.Post("/cluster/snapshot", req_data.dump(), "application/json")) {
+                        if (res->status == 200) {
+                            mcp_log("[Cluster] Child node '" + nodeId + "' snapshot success!");
+                        } else {
+                            mcp_log("[Error] Child node '" + nodeId + "' failed to snapshot: HTTP " + std::to_string(res->status));
+                        }
+                    } else {
+                        mcp_log("[Error] Failed to connect to child node '" + nodeId + "' for snapshot");
+                    }
+                });
+            }
+        }
+        
+        CallAfter([this, snap]() {
+            if (snap) {
+                txtCommitMsg->Clear();
+                wxMessageBox("Snapshot created successfully!", "Success", wxOK | wxICON_INFORMATION);
+                historyGraphPanel->LoadGraphData();
+                RefreshStagingList();
+            } else {
+                wxMessageBox("Failed to create snapshot.", "Error", wxOK | wxICON_ERROR);
+            }
+        });
+    });
+}
+
+void Windows::RefreshTargetServersList() {
+    if (!targetServersListSizer || !pnlTargetServersList) return;
+    targetServersListSizer->Clear(true);
+
+    // Always add local server (checked and disabled)
+    wxBoxSizer* localRow = new wxBoxSizer(wxHORIZONTAL);
+    wxCheckBox* chkLocal = new wxCheckBox(pnlTargetServersList, wxID_ANY, "Local Server (This)");
+    chkLocal->SetValue(true);
+    chkLocal->Enable(false);
+    chkLocal->SetForegroundColour(wxColour("#E2E8F0"));
+    chkLocal->SetFont(wxFontInfo(10));
+    localRow->Add(chkLocal, 1, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    targetServersListSizer->Add(localRow, 0, wxEXPAND);
+
+    // Get nodes from ClusterManager
+    auto nodes = ClusterManager::GetInstance().GetNodes();
+    for (const auto& node : nodes) {
+        if (node.id != "parent" && !node.is_parent && node.status == "connected") {
+            wxBoxSizer* rowSizer = new wxBoxSizer(wxHORIZONTAL);
+            wxCheckBox* chkNode = new wxCheckBox(pnlTargetServersList, wxID_ANY, wxString(node.hostname) + " (" + wxString(node.id) + ")");
+            
+            bool is_selected = std::find(selectedTargetServers.begin(), selectedTargetServers.end(), node.id) != selectedTargetServers.end();
+            chkNode->SetValue(is_selected);
+            chkNode->SetForegroundColour(wxColour("#E2E8F0"));
+            chkNode->SetFont(wxFontInfo(10));
+            rowSizer->Add(chkNode, 1, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+
+            chkNode->Bind(wxEVT_CHECKBOX, [this, nodeId = node.id](wxCommandEvent& ev) {
+                if (ev.IsChecked()) {
+                    if (std::find(selectedTargetServers.begin(), selectedTargetServers.end(), nodeId) == selectedTargetServers.end()) {
+                        selectedTargetServers.push_back(nodeId);
+                    }
+                } else {
+                    auto it = std::find(selectedTargetServers.begin(), selectedTargetServers.end(), nodeId);
+                    if (it != selectedTargetServers.end()) {
+                        selectedTargetServers.erase(it);
+                    }
+                }
+            });
+
+            targetServersListSizer->Add(rowSizer, 0, wxEXPAND);
+        }
+    }
+
+    pnlTargetServersList->Layout();
 }

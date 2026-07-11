@@ -8,6 +8,7 @@
 #include "server.h"
 #include "../gui/sys_stats.h"
 #include "confirmation_manager.h"
+#include "SnapshotManager.h"
 
 #ifndef _WIN32
 #include <unistd.h>
@@ -236,6 +237,44 @@ void register_cluster_endpoints(httplib::Server& svr) {
             } else {
                 res.status = 403;
                 res.set_content("{\"status\":\"denied\"}", "application/json");
+            }
+        } catch (...) {
+            res.status = 400;
+        }
+    });
+
+    svr.Post("/cluster/snapshot", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            json data = json::parse(req.body);
+            std::string desc = data.value("description", "Remote Snapshot");
+            std::string author = data.value("author", "Parent Server");
+            
+            auto snap = SnapshotManager::GetInstance().CreateSnapshot(SnapshotAuthor::Human, author, desc);
+            if (snap) {
+                res.status = 200;
+                json resp = {{"status", "ok"}, {"snapshot_id", snap->id}};
+                res.set_content(resp.dump(), "application/json");
+            } else {
+                res.status = 500;
+                res.set_content("{\"error\":\"Failed to create snapshot\"}", "application/json");
+            }
+        } catch (...) {
+            res.status = 400;
+        }
+    });
+
+    svr.Post("/cluster/rollback", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            json data = json::parse(req.body);
+            std::string snap_id = data.value("snapshot_id", "");
+            
+            bool ok = SnapshotManager::GetInstance().RollbackTo(snap_id);
+            if (ok) {
+                res.status = 200;
+                res.set_content("{\"status\":\"ok\"}", "application/json");
+            } else {
+                res.status = 500;
+                res.set_content("{\"error\":\"Failed to rollback\"}", "application/json");
             }
         } catch (...) {
             res.status = 400;

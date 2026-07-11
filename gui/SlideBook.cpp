@@ -62,7 +62,7 @@ void SlideBook::ChangeSelection(size_t index) {
     oldPage->SetSize(size);
     oldPage->SetPosition(wxPoint(0, 0));
     
-    m_animTimer->Start(5); // 200fps upper bound for ultra-smooth layout updates
+    m_animTimer->Start(16); // ~60fps layout updates
 }
 
 void SlideBook::OnSize(wxSizeEvent& event) {
@@ -83,7 +83,7 @@ void SlideBook::OnSize(wxSizeEvent& event) {
 void SlideBook::OnAnimTimer(wxTimerEvent& event) {
     if (m_progress >= 1.0) return;
     
-    m_progress += 0.02; // completes in 50 frames (250ms at 200fps)
+    m_progress += 0.06; // completes in 16 frames (~250ms at 60fps)
     if (m_progress >= 1.0) {
         m_progress = 1.0;
         m_animTimer->Stop();
@@ -93,6 +93,11 @@ void SlideBook::OnAnimTimer(wxTimerEvent& event) {
         m_selection = m_targetSelection;
         
         m_pages[m_selection]->SetPosition(wxPoint(0, 0));
+        m_pages[m_selection]->SetSize(GetClientSize());
+        m_pages[m_selection]->Refresh();
+        m_pages[m_selection]->Update();
+        Refresh();
+        Update();
         return;
     }
     
@@ -116,4 +121,12 @@ void SlideBook::OnAnimTimer(wxTimerEvent& event) {
         m_pages[m_selection]->SetPosition(wxPoint(0, oldY));
         m_pages[m_targetSelection]->SetPosition(wxPoint(0, newY));
     }
+
+    // Refresh and update animating pages immediately to avoid lag and trailing
+    m_pages[m_selection]->Refresh();
+    m_pages[m_selection]->Update();
+    m_pages[m_targetSelection]->Refresh();
+    m_pages[m_targetSelection]->Update();
+    Refresh();
+    Update();
 }
